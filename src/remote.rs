@@ -7,12 +7,12 @@ mod url {
     use const_format::concatcp;
 
     const BASE: &str = "https://lrclib.net/api/";
-    pub const GET: &str = concatcp!(BASE, "get/");
+    pub const GET: &str = concatcp!(BASE, "get");
 }
 
 static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| client_init().unwrap());
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct LyricsRequest {
     pub artist: String,
     pub title: String,
@@ -20,7 +20,7 @@ pub struct LyricsRequest {
     pub duration_secs: Option<u32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LyricsResponse {
     pub id: u64,
