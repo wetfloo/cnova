@@ -55,6 +55,23 @@ impl DirEntryExt for DirEntry {
     }
 
     fn is_suitable_file(&self) -> bool {
-        self.file_type().is_file()
+        if !self.file_type().is_file() {
+            return false;
+        }
+
+        match self
+            .path()
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|s| s.to_ascii_lowercase())
+        {
+            Some(extension) => {
+                matches!(
+                    extension.as_str(),
+                    "mp3" | "mp4" | "aac" | "alac" | "flac" | "opus" | "ogg" | "wav"
+                )
+            }
+            None => false,
+        }
     }
 }
