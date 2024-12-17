@@ -31,15 +31,17 @@ fn main() {
     });
 
     let iter = WalkDir::new(file_path).into_iter();
-    for entry in iter
+    let files: Vec<_> = iter
         .filter_entry(|entry| !dir_iter_cfg.skip_hidden || entry.is_hidden())
         .filter_map(|entry_res| entry_res.map_err(|e| todo_err!(e)).ok())
-    {
-        if entry.is_suitable_file(&dir_iter_cfg) {
-            dbg!(&entry);
-            let tagged_file = if dir_iter_cfg.laxed_ext_mode {
-                read_from_path(entry.path()).map_err(|e| todo_err!(e))
-            } else {
+        .filter(|entry| entry.is_suitable_file(&dir_iter_cfg))
+        .collect();
+
+    for entry in files {
+        dbg!(&entry);
+        let tagged_file = if dir_iter_cfg.laxed_ext_mode {
+            read_from_path(entry.path()).map_err(|e| todo_err!(e))
+        } else {
                 Probe::open(entry.path())
                     .map_err(|e| todo_err!(e))
                     .and_then(|probe| probe.guess_file_type().map_err(|e| todo_err!(e)))
@@ -47,14 +49,13 @@ fn main() {
             }
             .ok();
 
-            match tagged_file {
-                Some(tagged_file) => {
-                    for tag in tagged_file.tags() {
-                        dbg!(tag.title(), tag.artist());
-                    }
+        match tagged_file {
+            Some(tagged_file) => {
+                for tag in tagged_file.tags() {
+                    dbg!(tag.title(), tag.artist());
                 }
-                None => eprintln!("TODO: failed to read file"),
             }
+            None => eprintln!("TODO: failed to read file"),
         }
     }
 }
