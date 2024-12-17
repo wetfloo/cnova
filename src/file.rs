@@ -26,7 +26,7 @@ impl Default for DirIterCfg {
     }
 }
 
-fn files<P>(path: P, cfg: &DirIterCfg) -> Vec<DirEntry>
+pub fn list_files<P>(path: P, cfg: &DirIterCfg) -> Vec<DirEntry>
 where
     P: AsRef<Path>,
 {
@@ -38,7 +38,7 @@ where
         .collect()
 }
 
-async fn all_file_requests<I>(entries: I, cfg: &DirIterCfg) -> Vec<LyricsRequest>
+pub fn all_file_requests<I>(entries: I, cfg: &DirIterCfg) -> Vec<LyricsRequest>
 where
     // I still don't get HRTBs....
     for<'a> I: IntoParallelRefIterator<'a, Item = DirEntry>,
@@ -61,7 +61,7 @@ where
         .collect() // TODO: remove this and send requests
 }
 
-fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
+pub fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
     let tags_set = file.tags().first()?;
     let request = LyricsRequest {
         artist: tags_set.artist()?.into_owned(),
