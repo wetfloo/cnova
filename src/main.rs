@@ -1,4 +1,5 @@
 use lofty::{file::TaggedFileExt, probe::Probe, read_from_path, tag::Accessor};
+use rayon::prelude::*;
 use std::{env, process};
 use util::todo_err;
 use walkdir::{DirEntry, WalkDir};
@@ -37,17 +38,17 @@ fn main() {
         .filter(|entry| entry.is_suitable_file(&dir_iter_cfg))
         .collect();
 
-    for entry in files {
+    files.into_par_iter().for_each(|entry| {
         dbg!(&entry);
         let tagged_file = if dir_iter_cfg.laxed_ext_mode {
             read_from_path(entry.path()).map_err(|e| todo_err!(e))
         } else {
-                Probe::open(entry.path())
-                    .map_err(|e| todo_err!(e))
-                    .and_then(|probe| probe.guess_file_type().map_err(|e| todo_err!(e)))
-                    .and_then(|probe| probe.read().map_err(|e| todo_err!(e)))
-            }
-            .ok();
+            Probe::open(entry.path())
+                .map_err(|e| todo_err!(e))
+                .and_then(|probe| probe.guess_file_type().map_err(|e| todo_err!(e)))
+                .and_then(|probe| probe.read().map_err(|e| todo_err!(e)))
+        }
+        .ok();
 
         match tagged_file {
             Some(tagged_file) => {
@@ -57,7 +58,7 @@ fn main() {
             }
             None => eprintln!("TODO: failed to read file"),
         }
-    }
+    })
 }
 
 trait DirEntryExt {
