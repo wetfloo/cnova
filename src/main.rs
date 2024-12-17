@@ -33,13 +33,7 @@ fn main() {
     let iter = WalkDir::new(file_path).into_iter();
     for entry in iter
         .filter_entry(|entry| !dir_iter_cfg.skip_hidden || entry.is_hidden())
-        .filter_map(|entry_res| match entry_res {
-            Ok(entry) => Some(entry),
-            Err(err) => {
-                todo_err!(err);
-                None
-            }
-        })
+        .filter_map(|entry_res| entry_res.map_err(|e| todo_err!(e)).ok())
     {
         if entry.is_suitable_file(&dir_iter_cfg) {
             dbg!(&entry);
