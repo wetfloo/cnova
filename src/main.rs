@@ -3,6 +3,7 @@ use std::{env, process};
 use util::todo_err;
 use walkdir::{DirEntry, WalkDir};
 
+mod remote;
 mod util;
 
 struct DirIterCfg {
@@ -11,7 +12,6 @@ struct DirIterCfg {
     laxed_ext_mode: bool,
 }
 
-#[allow(clippy::derivable_impls)]
 impl Default for DirIterCfg {
     fn default() -> Self {
         Self {
