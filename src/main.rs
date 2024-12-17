@@ -6,12 +6,18 @@ mod util;
 
 struct DirIterCfg {
     skip_hidden: bool,
+    ignore_non_music_ext: bool,
+    laxed_ext_mode: bool,
 }
 
 #[allow(clippy::derivable_impls)]
 impl Default for DirIterCfg {
     fn default() -> Self {
-        Self { skip_hidden: false }
+        Self {
+            skip_hidden: false,
+            ignore_non_music_ext: true,
+            laxed_ext_mode: false,
+        }
     }
 }
 
@@ -34,7 +40,7 @@ fn main() {
             }
         })
     {
-        if entry.is_suitable_file() {
+        if entry.is_suitable_file(&dir_iter_cfg) {
             dbg!(&entry);
         }
     }
@@ -43,7 +49,7 @@ fn main() {
 trait DirEntryExt {
     fn is_hidden(&self) -> bool;
 
-    fn is_suitable_file(&self) -> bool;
+    fn is_suitable_file(&self, cfg: &DirIterCfg) -> bool;
 }
 
 impl DirEntryExt for DirEntry {
@@ -54,9 +60,13 @@ impl DirEntryExt for DirEntry {
             .unwrap_or(false)
     }
 
-    fn is_suitable_file(&self) -> bool {
+    fn is_suitable_file(&self, cfg: &DirIterCfg) -> bool {
         if !self.file_type().is_file() {
             return false;
+        }
+
+        if cfg.ignore_non_music_ext {
+            return true;
         }
 
         match self
