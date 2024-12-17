@@ -25,7 +25,7 @@ fn main() {
 
     let iter = WalkDir::new(file_path).into_iter();
     for entry in iter
-        .filter_entry(|entry| !dir_iter_cfg.skip_hidden || is_hidden(entry))
+        .filter_entry(|entry| !dir_iter_cfg.skip_hidden || entry.is_hidden())
         .filter_map(|entry_res| match entry_res {
             Ok(entry) => Some(entry),
             Err(err) => {
@@ -33,13 +33,28 @@ fn main() {
                 None
             }
         })
-    {}
+    {
+        if entry.is_suitable_file() {
+            dbg!(&entry);
+        }
+    }
 }
 
-fn is_hidden(entry: &DirEntry) -> bool {
-    entry
-        .file_name()
-        .to_str()
-        .map(|s| s.starts_with("."))
-        .unwrap_or(false)
+trait DirEntryExt {
+    fn is_hidden(&self) -> bool;
+
+    fn is_suitable_file(&self) -> bool;
+}
+
+impl DirEntryExt for DirEntry {
+    fn is_hidden(&self) -> bool {
+        self.file_name()
+            .to_str()
+            .map(|s| s.starts_with("."))
+            .unwrap_or(false)
+    }
+
+    fn is_suitable_file(&self) -> bool {
+        self.file_type().is_file()
+    }
 }
