@@ -1,12 +1,12 @@
 use file::DirIterCfg;
 use std::{env, process};
-use walkdir::WalkDir;
 
 mod file;
 mod remote;
 mod util;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let dir_iter_cfg = DirIterCfg::default();
 
     let file_path = env::args().nth(1).unwrap_or_else(|| {
@@ -14,5 +14,6 @@ fn main() {
         process::exit(1);
     });
 
-    let iter = WalkDir::new(file_path).into_iter();
+    let files = file::list_files(file_path, &dir_iter_cfg);
+    let requests = file::all_file_requests(&files, &dir_iter_cfg);
 }

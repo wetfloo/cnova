@@ -38,11 +38,7 @@ where
         .collect()
 }
 
-pub fn all_file_requests<I>(entries: I, cfg: &DirIterCfg) -> Vec<LyricsRequest>
-where
-    // I still don't get HRTBs....
-    for<'a> I: IntoParallelRefIterator<'a, Item = DirEntry>,
-{
+pub fn all_file_requests(entries: &[DirEntry], cfg: &DirIterCfg) -> Vec<LyricsRequest> {
     entries
         .par_iter()
         .filter_map(|entry| {
@@ -61,7 +57,7 @@ where
         .collect() // TODO: remove this and send requests
 }
 
-pub fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
+fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
     let tags_set = file.tags().first()?;
     let request = LyricsRequest {
         artist: tags_set.artist()?.into_owned(),
