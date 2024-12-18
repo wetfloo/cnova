@@ -4,7 +4,6 @@ use tokio::task::JoinSet;
 
 mod file;
 mod remote;
-mod util;
 
 #[tokio::main]
 async fn main() {
