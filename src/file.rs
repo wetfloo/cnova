@@ -68,14 +68,44 @@ pub fn all_file_requests(entries: &[DirEntry], cfg: &DirIterCfg) -> Vec<LyricsRe
 }
 
 fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
-    let tags_set = file.tags().first()?;
-    let request = LyricsRequest {
-        artist: tags_set.artist()?.into_owned(),
-        title: tags_set.title()?.into_owned(),
-        album: tags_set.album().map(|cow| cow.into_owned()),
-        duration: None, // TODO
-    };
-    Some(request)
+    let _span = tracing::span!(tracing::Level::TRACE, "prepare_lyrics_request");
+
+    let tags_slice = file.tags();
+
+    let artist = tags_slice
+        .iter()
+        .find_map(|tags| tags.artist())
+        .map(|cow| cow.into_owned());
+    let title = tags_slice
+        .iter()
+        .find_map(|tags| tags.title())
+        .map(|cow| cow.into_owned());
+    let album = tags_slice
+        .iter()
+        .find_map(|tags| tags.album())
+        .map(|cow| cow.into_owned());
+    let duration = None; // TODO
+
+    if title.is_none() {
+        tracing::warn!("title couldn't be read");
+    }
+    if artist.is_none() {
+        tracing::warn!("artist couldn't be read");
+    }
+    if album.is_none() {
+        tracing::warn!("album couldn't be read");
+    }
+    // TODO
+    //if duration.is_none() {
+    //    tracing::warn!("duration couldn't be read");
+    //}
+
+    Some(LyricsRequest {
+        title: title?,
+        artist: artist?,
+        album,
+        duration,
+    })
 }
 
 trait DirEntryExt {
