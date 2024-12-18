@@ -48,13 +48,24 @@ where
         .into_par_iter()
         .filter_map(|entry| {
             let _span = tracing::span!(tracing::Level::TRACE, "filter_ok_files", ?entry, ?cfg);
+            let path = entry.path();
 
-            if cfg.laxed_ext_mode {
-                read_from_path(entry.path())
+            if path
+                .extension()
+                .map(|ext| ext.eq_ignore_ascii_case("lrc"))
+                .unwrap_or(false)
+            {
+                tracing::info!(
+                    ?entry,
+                    "found an entry with existing lrc extension, skipping"
+                );
+                None
+            } else if cfg.laxed_ext_mode {
+                read_from_path(path)
                     .inspect_err(|e| tracing::warn!(?e))
                     .ok()
             } else {
-                Probe::open(entry.path())
+                Probe::open(path)
                     .inspect_err(|e| tracing::warn!(?e))
                     .ok()
                     .and_then(|probe| {
@@ -135,19 +146,17 @@ impl DirEntryExt for DirEntry {
             return true;
         }
 
-        match self
-            .path()
+        self.path()
             .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|s| s.to_ascii_lowercase())
-        {
-            Some(extension) => {
-                matches!(
-                    extension.as_str(),
-                    "mp3" | "mp4" | "aac" | "alac" | "flac" | "opus" | "ogg" | "wav"
-                )
-            }
-            None => false,
-        }
+            .map(|ext| {
+                ext.eq_ignore_ascii_case("aac")
+                    || ext.eq_ignore_ascii_case("alac")
+                    || ext.eq_ignore_ascii_case("flac")
+                    || ext.eq_ignore_ascii_case("mp3")
+                    || ext.eq_ignore_ascii_case("ogg")
+                    || ext.eq_ignore_ascii_case("opus")
+                    || ext.eq_ignore_ascii_case("wav")
+            })
+            .unwrap_or(false)
     }
 }
