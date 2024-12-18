@@ -102,6 +102,49 @@ mod duration_secs {
     use std::fmt::{self, Formatter};
     use std::time::Duration;
 
+    struct OptionVisitor;
+
+    impl<'de> Visitor<'de> for OptionVisitor {
+        type Value = Option<Duration>;
+
+        fn expecting(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+            formatter.write_str("optional floating point value, representing the amount of seconds")
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_f32(self)
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            dbg!("visit_none");
+            Ok(None)
+        }
+
+        fn visit_f32<E>(self, secs: f32) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Duration::try_from_secs_f32(secs)
+                .map(Some)
+                .map_err(|_| de::Error::invalid_value(Unexpected::Float(secs.into()), &self))
+        }
+
+        fn visit_f64<E>(self, secs: f64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Duration::try_from_secs_f64(secs)
+                .map(Some)
+                .map_err(|_| de::Error::invalid_value(Unexpected::Float(secs), &self))
+        }
+    }
+
     pub fn serialize<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -116,49 +159,6 @@ mod duration_secs {
     where
         D: Deserializer<'de>,
     {
-        struct OptionVisitor;
-
-        impl<'de> Visitor<'de> for OptionVisitor {
-            type Value = Option<Duration>;
-
-            fn expecting(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-                formatter.write_str("optional floating point value, representing the amount of seconds")
-            }
-
-            fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                deserializer.deserialize_f32(self)
-            }
-
-            fn visit_none<E>(self) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                dbg!("visit_none");
-                Ok(None)
-            }
-
-            fn visit_f32<E>(self, secs: f32) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Duration::try_from_secs_f32(secs)
-                    .map(Some)
-                    .map_err(|_| de::Error::invalid_value(Unexpected::Float(secs.into()), &self))
-            }
-
-            fn visit_f64<E>(self, secs: f64) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Duration::try_from_secs_f64(secs)
-                    .map(Some)
-                    .map_err(|_| de::Error::invalid_value(Unexpected::Float(secs), &self))
-            }
-        }
-
         deserializer.deserialize_option(OptionVisitor)
     }
 }
