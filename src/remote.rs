@@ -24,17 +24,23 @@ pub struct LyricsRequest {
     pub duration: Option<Duration>,
 }
 
-#[derive(Debug, Deserialize)]
+/// Represents a response containing all the available info about the track, deserialized.
+/// `duration` is parsed from seconds
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LyricsResponse {
-    pub id: u64,
-    pub track_name: Option<String>,
-    pub artist_name: Option<String>,
-    pub album_name: Option<String>,
+    pub id: Option<u64>,
+    #[serde(rename = "trackName")]
+    pub title: Option<String>,
+    #[serde(rename = "artistName")]
+    pub artist: Option<String>,
+    #[serde(rename = "albumName")]
+    pub album: Option<String>,
     #[serde(with = "duration_secs")]
+    /// Track duration, parsed from seconds
     pub duration: Option<Duration>,
-    pub instrumental: bool,
-    pub plain_lyrics: String,
+    pub instrumental: Option<bool>,
+    pub plain_lyrics: Option<String>,
     pub synced_lyrics: Option<String>,
 }
 
@@ -108,7 +114,7 @@ mod duration_secs {
         type Value = Option<Duration>;
 
         fn expecting(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-            formatter.write_str("optional floating point value, representing the amount of seconds")
+            formatter.write_str("optional number point value, representing the amount of seconds")
         }
 
         fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
@@ -143,6 +149,34 @@ mod duration_secs {
                 .map(Some)
                 .map_err(|_| de::Error::invalid_value(Unexpected::Float(secs), &self))
         }
+
+        fn visit_u64<E>(self, secs: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(Some(Duration::from_secs(secs)))
+        }
+
+        fn visit_u32<E>(self, secs: u32) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            self.visit_u64(secs.into())
+        }
+
+        fn visit_u16<E>(self, secs: u16) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            self.visit_u64(secs.into())
+        }
+
+        fn visit_u8<E>(self, secs: u8) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            self.visit_u64(secs.into())
+        }
     }
 
     pub fn serialize<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
@@ -160,5 +194,74 @@ mod duration_secs {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_option(OptionVisitor)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::LyricsResponse;
+    
+    use std::time::Duration;
+
+    #[test]
+    fn parse_with_duration_float() {
+        let data = r#"
+                {
+                    "id": 42069,
+                    "trackName": "title",
+                    "artistName": "artist",
+                    "albumName": "album",
+                    "duration": 300.0,
+                    "instrumental": true,
+                    "plainLyrics": "Some lyrics",
+                    "syncedLyrics": "Some synced lyrics"
+                }
+            "#;
+        let value: LyricsResponse = serde_json::from_str(data).unwrap();
+
+        assert_eq!(
+            LyricsResponse {
+                id: Some(42069),
+                title: Some("title".to_owned()),
+                artist: Some("artist".to_owned()),
+                album: Some("album".to_owned()),
+                duration: Some(Duration::from_secs(300)),
+                instrumental: Some(true),
+                plain_lyrics: Some("Some lyrics".to_owned()),
+                synced_lyrics: Some("Some synced lyrics".to_owned()),
+            },
+            value
+        );
+    }
+
+    #[test]
+    fn parse_with_duration_int() {
+        let data = r#"
+                {
+                    "id": 42069,
+                    "trackName": "title",
+                    "artistName": "artist",
+                    "albumName": "album",
+                    "duration": 300,
+                    "instrumental": true,
+                    "plainLyrics": "Some lyrics",
+                    "syncedLyrics": "Some synced lyrics"
+                }
+            "#;
+        let value: LyricsResponse = serde_json::from_str(data).unwrap();
+
+        assert_eq!(
+            LyricsResponse {
+                id: Some(42069),
+                title: Some("title".to_owned()),
+                artist: Some("artist".to_owned()),
+                album: Some("album".to_owned()),
+                duration: Some(Duration::from_secs(300)),
+                instrumental: Some(true),
+                plain_lyrics: Some("Some lyrics".to_owned()),
+                synced_lyrics: Some("Some synced lyrics".to_owned()),
+            },
+            value
+        );
     }
 }
