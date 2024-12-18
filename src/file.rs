@@ -42,7 +42,6 @@ pub fn all_file_requests(entries: &[DirEntry], cfg: &DirIterCfg) -> Vec<LyricsRe
     entries
         .par_iter()
         .filter_map(|entry| {
-            dbg!(&entry);
             if cfg.laxed_ext_mode {
                 read_from_path(entry.path()).map_err(|e| todo_err!(e))
             } else {
@@ -63,7 +62,7 @@ fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
         artist: tags_set.artist()?.into_owned(),
         title: tags_set.title()?.into_owned(),
         album: tags_set.album().map(|cow| cow.into_owned()),
-        duration_secs: None, // TODO
+        duration: None, // TODO
     };
     Some(request)
 }

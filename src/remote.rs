@@ -20,8 +20,8 @@ pub struct LyricsRequest {
     pub title: String,
     #[serde(rename = "album_name")]
     pub album: Option<String>,
-    #[serde(rename = "duration")]
-    pub duration_secs: Option<f32>,
+    #[serde(with = "duration_secs")]
+    pub duration: Option<Duration>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,11 +31,11 @@ pub struct LyricsResponse {
     pub track_name: Option<String>,
     pub artist_name: Option<String>,
     pub album_name: Option<String>,
-    #[serde(rename = "duration")]
-    pub duration_secs: f32,
+    #[serde(with = "duration_secs")]
+    pub duration: Option<Duration>,
     pub instrumental: bool,
     pub plain_lyrics: String,
-    pub synced_lyrics: String,
+    pub synced_lyrics: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -94,4 +94,50 @@ fn client_init() -> Result<reqwest::Client, ClientInitErr> {
         .timeout(Duration::from_secs(10))
         .build()
         .map_err(|e| e.into())
+}
+
+mod duration_secs {
+    use serde::de::{self, SeqAccess, Unexpected, Visitor};
+    use serde::{Deserializer, Serializer};
+    use std::fmt::{self, Formatter};
+    use std::time::Duration;
+
+    pub fn serialize<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match duration {
+            Some(duration) => serializer.serialize_f32(duration.as_secs_f32()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct SecsVisitor;
+
+        impl<'de> Visitor<'de> for SecsVisitor {
+            type Value = Option<Duration>;
+
+            fn expecting(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+                formatter.write_str("optional string `std::time::Duration` in secs as `f32`")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                match seq.next_element()? {
+                    Some(secs) => Duration::try_from_secs_f32(secs).map(Some).map_err(|_| {
+                        de::Error::invalid_value(Unexpected::Float(secs.into()), &self)
+                    }),
+                    None => Ok(None),
+                }
+            }
+        }
+
+        deserializer.deserialize_option(SecsVisitor)
+    }
 }

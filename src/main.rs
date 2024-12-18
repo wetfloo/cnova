@@ -23,7 +23,6 @@ async fn main() {
     let semaphore = Arc::new(tokio::sync::Semaphore::const_new(3));
 
     for request in requests {
-        dbg!(&request);
         let semaphore = semaphore.clone();
         join_set.spawn(async move {
             let permit = semaphore
@@ -37,7 +36,5 @@ async fn main() {
         });
     }
 
-    for item in join_set.join_all().await {
-        dbg!(&item);
-    }
+    for item in join_set.join_all().await {}
 }
