@@ -40,9 +40,9 @@ where
         .collect()
 }
 
-pub fn all_file_requests<'a, I>(entries: I, cfg: &DirIterCfg) -> Vec<LyricsRequest>
+pub fn prepare_entries<I>(entries: I, cfg: &DirIterCfg) -> Vec<(LyricsRequest, DirEntry)>
 where
-    I: Debug + IntoParallelIterator<Item = &'a DirEntry>,
+    I: Debug + IntoParallelIterator<Item = DirEntry>,
 {
     entries
         .into_par_iter()
@@ -50,7 +50,7 @@ where
             let _span = tracing::span!(tracing::Level::TRACE, "filter_ok_files", ?entry, ?cfg);
             let path = entry.path();
 
-            if path
+            let tagged_file = if path
                 .extension()
                 .map(|ext| ext.eq_ignore_ascii_case("lrc"))
                 .unwrap_or(false)
@@ -75,9 +75,11 @@ where
                             .ok()
                     })
                     .and_then(|probe| probe.read().inspect_err(|e| tracing::warn!(?e)).ok())
-            }
+            };
+            tagged_file
+                .and_then(prepare_lyrics_request)
+                .map(|request| (request, entry))
         })
-        .filter_map(prepare_lyrics_request)
         .collect() // TODO: remove this and send requests
 }
 
