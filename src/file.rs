@@ -5,7 +5,7 @@ use lofty::{
     read_from_path,
     tag::Accessor,
 };
-use rayon::{iter::IntoParallelRefIterator, prelude::*};
+use rayon::prelude::*;
 use std::fmt::Debug;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
@@ -40,11 +40,14 @@ where
         .collect()
 }
 
-pub fn all_file_requests(entries: &[DirEntry], cfg: &DirIterCfg) -> Vec<LyricsRequest> {
+pub fn all_file_requests<'a, I>(entries: I, cfg: &DirIterCfg) -> Vec<LyricsRequest>
+where
+    I: Debug + IntoParallelIterator<Item = &'a DirEntry>,
+{
     entries
-        .par_iter()
+        .into_par_iter()
         .filter_map(|entry| {
-            let _span = tracing::span!(tracing::Level::TRACE, "filter_ok_files", ?entries, ?cfg);
+            let _span = tracing::span!(tracing::Level::TRACE, "filter_ok_files", ?entry, ?cfg);
 
             if cfg.laxed_ext_mode {
                 read_from_path(entry.path())
