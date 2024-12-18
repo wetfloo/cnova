@@ -200,12 +200,13 @@ mod duration_secs {
 #[cfg(test)]
 mod test {
     use super::LyricsResponse;
-    
+    use indoc::indoc;
+
     use std::time::Duration;
 
     #[test]
     fn parse_with_duration_float() {
-        let data = r#"
+        let data = indoc! {r#"
                 {
                     "id": 42069,
                     "trackName": "title",
@@ -216,7 +217,7 @@ mod test {
                     "plainLyrics": "Some lyrics",
                     "syncedLyrics": "Some synced lyrics"
                 }
-            "#;
+            "#};
         let value: LyricsResponse = serde_json::from_str(data).unwrap();
 
         assert_eq!(
@@ -236,7 +237,7 @@ mod test {
 
     #[test]
     fn parse_with_duration_int() {
-        let data = r#"
+        let data = indoc! {r#"
                 {
                     "id": 42069,
                     "trackName": "title",
@@ -247,7 +248,7 @@ mod test {
                     "plainLyrics": "Some lyrics",
                     "syncedLyrics": "Some synced lyrics"
                 }
-            "#;
+            "#};
         let value: LyricsResponse = serde_json::from_str(data).unwrap();
 
         assert_eq!(
