@@ -122,7 +122,7 @@ mod duration_secs {
             type Value = Option<Duration>;
 
             fn expecting(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-                formatter.write_str("TODO")
+                formatter.write_str("optional floating point value, representing the amount of seconds")
             }
 
             fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
