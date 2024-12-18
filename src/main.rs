@@ -36,5 +36,7 @@ async fn main() {
         });
     }
 
-    for item in join_set.join_all().await {}
+    for item in join_set.join_all().await {
+        dbg!(&item);
+    }
 }
