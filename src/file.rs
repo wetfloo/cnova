@@ -1,5 +1,4 @@
 use crate::remote::LyricsRequest;
-use crate::util::todo_err;
 use lofty::{
     file::{TaggedFile, TaggedFileExt},
     probe::Probe,
@@ -7,9 +6,11 @@ use lofty::{
     tag::Accessor,
 };
 use rayon::{iter::IntoParallelRefIterator, prelude::*};
+use std::fmt::Debug;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
+#[derive(Debug)]
 pub struct DirIterCfg {
     pub skip_hidden: bool,
     pub skip_non_music_ext: bool,
@@ -26,14 +27,15 @@ impl Default for DirIterCfg {
     }
 }
 
+#[tracing::instrument(level = "trace")]
 pub fn list_files<P>(path: P, cfg: &DirIterCfg) -> Vec<DirEntry>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
 {
     WalkDir::new(path)
         .into_iter()
         .filter_entry(|entry| !cfg.skip_hidden || entry.is_hidden())
-        .filter_map(|entry_res| entry_res.map_err(|e| todo_err!(e)).ok())
+        .filter_map(|entry_res| entry_res.inspect_err(|e| tracing::warn!(?e)).ok())
         .filter(|entry| entry.is_suitable_file(cfg))
         .collect()
 }
@@ -42,15 +44,24 @@ pub fn all_file_requests(entries: &[DirEntry], cfg: &DirIterCfg) -> Vec<LyricsRe
     entries
         .par_iter()
         .filter_map(|entry| {
+            let _span = tracing::span!(tracing::Level::TRACE, "filter_ok_files", ?entries, ?cfg);
+
             if cfg.laxed_ext_mode {
-                read_from_path(entry.path()).map_err(|e| todo_err!(e))
+                read_from_path(entry.path())
+                    .inspect_err(|e| tracing::warn!(?e))
+                    .ok()
             } else {
                 Probe::open(entry.path())
-                    .map_err(|e| todo_err!(e))
-                    .and_then(|probe| probe.guess_file_type().map_err(|e| todo_err!(e)))
-                    .and_then(|probe| probe.read().map_err(|e| todo_err!(e)))
+                    .inspect_err(|e| tracing::warn!(?e))
+                    .ok()
+                    .and_then(|probe| {
+                        probe
+                            .guess_file_type()
+                            .inspect_err(|e| tracing::warn!(?e))
+                            .ok()
+                    })
+                    .and_then(|probe| probe.read().inspect_err(|e| tracing::warn!(?e)).ok())
             }
-            .ok()
         })
         .filter_map(prepare_lyrics_request)
         .collect() // TODO: remove this and send requests
