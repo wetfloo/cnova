@@ -23,8 +23,8 @@ async fn main() {
 
     for (request, dir_entry) in rx
         .into_iter()
+        // TODO: do something with the result
         .filter_map(|pack| pack.ok().map(|pack| pack.into()))
-    // TODO: do something with the result
     {
         let semaphore = semaphore.clone();
         join_set.spawn(async move {
