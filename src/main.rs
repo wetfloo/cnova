@@ -2,6 +2,7 @@ use file::DirIterCfg;
 use reqwest::StatusCode;
 use std::{env, process, sync::Arc};
 use tokio::task::JoinSet;
+use tracing_subscriber::prelude::*;
 
 mod file;
 mod remote;
@@ -9,6 +10,11 @@ mod remote;
 #[tokio::main]
 #[tracing::instrument(level = "trace")]
 async fn main() {
+    let stdout_log = tracing_subscriber::fmt::layer().pretty();
+    let subscriber = tracing_subscriber::Registry::default().with(stdout_log);
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("unable to set global tracing subscriber");
+
     let dir_iter_cfg = DirIterCfg::default();
 
     let file_path = env::args().nth(1).unwrap_or_else(|| {

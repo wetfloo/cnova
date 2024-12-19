@@ -59,7 +59,7 @@ pub enum LyricsError {
 
 #[tracing::instrument(level = "trace")]
 pub async fn get_lyrics(req: &LyricsRequest) -> Result<LyricsResponse, LyricsError> {
-    tracing::trace!("building the client");
+    tracing::trace!("building request");
     let request = CLIENT
         .get(url::GET)
         .query(req)
