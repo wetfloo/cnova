@@ -16,6 +16,11 @@ async fn main() {
     });
 
     let files = file::list_files(file_path, &dir_iter_cfg);
+    // TODO: instead of collecting this into vecs, we could either:
+    // 1. Collect only files into a vec, then work with parallel iterators and crossbeam channels
+    //    to start downloading as soon as we read some info from file
+    // 2. Same as above, but don't bother collecting files, just send them over a channel to
+    //    preparation fn
     let requests = file::prepare_entries(files, &dir_iter_cfg);
 
     let mut join_set = JoinSet::new();
