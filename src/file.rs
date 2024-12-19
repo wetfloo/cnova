@@ -1,89 +1,165 @@
 use crate::remote::LyricsRequest;
+use ignore::WalkState;
 use lofty::{
+    error::LoftyError,
     file::{TaggedFile, TaggedFileExt},
     probe::Probe,
     read_from_path,
     tag::Accessor,
 };
-use rayon::prelude::*;
-use std::fmt::Debug;
-use std::path::Path;
-use walkdir::{DirEntry, WalkDir};
+use std::{ffi::OsStr, fmt::Debug};
+use std::{io, path::Path};
 
 #[derive(Debug)]
-pub struct DirIterCfg {
+pub struct DirIterCfg<'a, 'b: 'a> {
     pub ignore_hidden: bool,
     pub ignore_non_music_ext: bool,
-    pub strict_mode: bool,
+    pub strictness: FileMatchStrictness,
+    pub plain_ignore_files: bool,
+    pub follow_symlinks: bool,
+    pub ignored_file_exts: &'a [&'b OsStr],
 }
 
-impl Default for DirIterCfg {
+#[derive(Clone, Copy, Debug)]
+pub enum FileMatchStrictness {
+    TrustyGuesser,
+    FilterByExt,
+    Paranoid,
+}
+
+impl Default for FileMatchStrictness {
+    fn default() -> Self {
+        Self::FilterByExt
+    }
+}
+
+impl Default for DirIterCfg<'_, '_> {
     fn default() -> Self {
         Self {
             ignore_hidden: false,
             ignore_non_music_ext: true,
-            strict_mode: false,
+            strictness: Default::default(),
+            follow_symlinks: true,
+            plain_ignore_files: true,
+            ignored_file_exts: [].as_slice(),
         }
     }
 }
 
-#[tracing::instrument(level = "trace")]
-pub fn list_files<P>(path: P, cfg: &DirIterCfg) -> Vec<DirEntry>
+pub fn prepare_v2<P>(
+    path: P,
+    cfg: &DirIterCfg,
+) -> crossbeam_channel::Receiver<Result<Pack, PackError>>
 where
     P: AsRef<Path> + Debug,
 {
-    WalkDir::new(path)
-        .into_iter()
-        .filter_entry(|entry| !cfg.ignore_hidden || entry.is_hidden())
-        .filter_map(|entry_res| entry_res.inspect_err(|e| tracing::warn!(?e)).ok())
-        .filter(|entry| entry.is_suitable_file(cfg))
-        .collect()
-}
+    let (tx, rx) = crossbeam_channel::unbounded();
 
-pub fn prepare_entries<I>(entries: I, cfg: &DirIterCfg) -> Vec<(LyricsRequest, DirEntry)>
-where
-    I: Debug + IntoParallelIterator<Item = DirEntry>,
-{
-    entries
-        .into_par_iter()
-        .filter_map(|entry| {
-            let _span = tracing::span!(tracing::Level::TRACE, "filter_ok_files", ?entry, ?cfg);
-            let path = entry.path();
-
-            let tagged_file = if path
-                .extension()
-                .map(|ext| ext.eq_ignore_ascii_case("lrc"))
-                .unwrap_or(false)
+    let walk = ignore::WalkBuilder::new(path)
+        .ignore_case_insensitive(true) // TODO: put this into config, maybe?
+        .ignore(true)
+        .git_ignore(false) // TODO: is this even needed in context of music?
+        .git_global(false)
+        .git_exclude(false)
+        .require_git(true)
+        .follow_links(cfg.follow_symlinks)
+        .hidden(cfg.ignore_hidden)
+        .build_parallel();
+    walk.run(move || {
+        let tx = tx.clone();
+        Box::new(move |entry| {
+            if let Some(pack) = entry
+                .inspect_err(|e| eprintln!("TODO {:?}", e))
+                .ok()
+                .filter(|entry| entry.file_type().map(|ft| ft.is_file()).unwrap_or(false))
+                .and_then(|entry| Pack::from_entry(entry, cfg.strictness).transpose())
             {
-                tracing::info!(
-                    ?entry,
-                    "found an entry with existing lrc extension, skipping"
-                );
-                None
-            } else if !cfg.strict_mode {
-                read_from_path(path)
-                    .inspect_err(|e| tracing::warn!(?e))
-                    .ok()
-            } else {
-                Probe::open(path)
-                    .inspect_err(|e| tracing::warn!(?e))
-                    .ok()
-                    .and_then(|probe| {
-                        probe
-                            .guess_file_type()
-                            .inspect_err(|e| tracing::warn!(?e))
-                            .ok()
-                    })
-                    .and_then(|probe| probe.read().inspect_err(|e| tracing::warn!(?e)).ok())
+                tx.send(pack).expect("this channel is unbounded, and, therefore, should always be available to send to");
             };
-            tagged_file
-                .and_then(prepare_lyrics_request)
-                .map(|request| (request, entry))
+
+            WalkState::Continue
         })
-        .collect() // TODO: remove this and send requests
+    });
+
+    rx
 }
 
-fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
+#[derive(Debug)]
+pub struct Pack(LyricsRequest, ignore::DirEntry);
+
+impl From<Pack> for (LyricsRequest, ignore::DirEntry) {
+    fn from(value: Pack) -> Self {
+        (value.0, value.1)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PackError {
+    #[error("lofty error")]
+    Lofty(#[from] LoftyError),
+    #[error("io error")]
+    Io(#[source] io::Error),
+    #[error(
+        "failed to prepare a request. artist is {:?}, title is {:?}",
+        artist,
+        title
+    )]
+    RequestPrepareError {
+        artist: Option<String>,
+        title: Option<String>,
+    },
+}
+
+impl Pack {
+    // TODO: return results with options instead, once I get to making a custom error type
+    fn from_entry(
+        entry: ignore::DirEntry,
+        strictness: FileMatchStrictness,
+    ) -> Result<Option<Self>, PackError> {
+        let path = entry.path();
+
+        let ext_matches = path
+            .extension()
+            .and_then(|ext| {
+                if !ext.eq_ignore_ascii_case("lrc") {
+                    Some(ext)
+                } else {
+                    tracing::info!(?path, "given path is an lrc file already, skipping");
+                    None
+                }
+            })
+            .map(|ext| {
+                ext.eq_ignore_ascii_case("aac")
+                    || ext.eq_ignore_ascii_case("alac")
+                    || ext.eq_ignore_ascii_case("flac")
+                    || ext.eq_ignore_ascii_case("mp3")
+                    || ext.eq_ignore_ascii_case("ogg")
+                    || ext.eq_ignore_ascii_case("opus")
+                    || ext.eq_ignore_ascii_case("wav")
+            })
+            .unwrap_or(false);
+
+        let tagged_file = match strictness {
+            FileMatchStrictness::Paranoid | FileMatchStrictness::TrustyGuesser if !ext_matches => {
+                Probe::open(path)
+                    .inspect_err(|e| tracing::warn!(?e))?
+                    .guess_file_type()
+                    .inspect_err(|e| tracing::warn!(?e))
+                    .map_err(PackError::Io)?
+                    .read()
+                    .inspect_err(|e| tracing::warn!(?e))?
+            }
+            FileMatchStrictness::Paranoid => return Ok(None),
+            FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
+                read_from_path(path).inspect_err(|e| tracing::warn!(?e))?
+            }
+        };
+
+        Ok(Some(Self(prepare_lyrics_request(tagged_file)?, entry)))
+    }
+}
+
+fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> {
     let _span = tracing::span!(tracing::Level::TRACE, "prepare_lyrics_request");
 
     let tags_slice = file.tags();
@@ -116,49 +192,28 @@ fn prepare_lyrics_request(file: TaggedFile) -> Option<LyricsRequest> {
     //    tracing::warn!("duration couldn't be read");
     //}
 
-    Some(LyricsRequest {
-        title: title?,
-        artist: artist?,
+    let (title, artist) = match (title, artist) {
+        (Some(title), Some(artist)) => (title, artist),
+        (title_opt, artist_opt) => {
+            return Err(PackError::RequestPrepareError {
+                artist: artist_opt,
+                title: title_opt,
+            })
+        }
+    };
+
+    Ok(LyricsRequest {
+        title,
+        artist,
         album,
         duration,
     })
 }
 
-trait DirEntryExt {
-    fn is_hidden(&self) -> bool;
+#[cfg(test)]
+mod test {
 
-    fn is_suitable_file(&self, cfg: &DirIterCfg) -> bool;
-}
-
-impl DirEntryExt for DirEntry {
-    fn is_hidden(&self) -> bool {
-        self.file_name()
-            .to_str()
-            .map(|s| s.starts_with("."))
-            .unwrap_or(false)
-    }
-
-    fn is_suitable_file(&self, cfg: &DirIterCfg) -> bool {
-        // TODO: this does not follow symlinks, fix it
-        if !self.file_type().is_file() {
-            return false;
-        }
-
-        if !cfg.ignore_non_music_ext {
-            return true;
-        }
-
-        self.path()
-            .extension()
-            .map(|ext| {
-                ext.eq_ignore_ascii_case("aac")
-                    || ext.eq_ignore_ascii_case("alac")
-                    || ext.eq_ignore_ascii_case("flac")
-                    || ext.eq_ignore_ascii_case("mp3")
-                    || ext.eq_ignore_ascii_case("ogg")
-                    || ext.eq_ignore_ascii_case("opus")
-                    || ext.eq_ignore_ascii_case("wav")
-            })
-            .unwrap_or(false)
-    }
+    #[test]
+    // TODO: rename
+    fn test_something_todo() {}
 }

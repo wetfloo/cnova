@@ -129,10 +129,10 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.7",
  "tokio",
  "tracing",
- "walkdir",
 ]
 
 [[package]]

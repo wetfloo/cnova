@@ -15,19 +15,17 @@ async fn main() {
         process::exit(1);
     });
 
-    let files = file::list_files(file_path, &dir_iter_cfg);
-    // TODO: instead of collecting this into vecs, we could either:
-    // 1. Collect only files into a vec, then work with parallel iterators and crossbeam channels
-    //    to start downloading as soon as we read some info from file
-    // 2. Same as above, but don't bother collecting files, just send them over a channel to
-    //    preparation fn
-    let requests = file::prepare_entries(files, &dir_iter_cfg);
+    let rx = file::prepare_v2(file_path, &dir_iter_cfg);
 
     let mut join_set = JoinSet::new();
     // To not overload the site with insane number of requests
     let semaphore = Arc::new(tokio::sync::Semaphore::const_new(3));
 
-    for (request, dir_entry) in requests {
+    for (request, dir_entry) in rx
+        .into_iter()
+        .filter_map(|pack| pack.ok().map(|pack| pack.into()))
+    // TODO: do something with the result
+    {
         let semaphore = semaphore.clone();
         join_set.spawn(async move {
             let permit = semaphore
