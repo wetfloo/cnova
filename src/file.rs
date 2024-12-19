@@ -209,11 +209,3 @@ fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> 
         duration,
     })
 }
-
-#[cfg(test)]
-mod test {
-
-    #[test]
-    // TODO: rename
-    fn test_something_todo() {}
-}
