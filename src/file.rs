@@ -12,17 +12,17 @@ use walkdir::{DirEntry, WalkDir};
 
 #[derive(Debug)]
 pub struct DirIterCfg {
-    pub skip_hidden: bool,
-    pub skip_non_music_ext: bool,
-    pub laxed_ext_mode: bool,
+    pub ignore_hidden: bool,
+    pub ignore_non_music_ext: bool,
+    pub strict_mode: bool,
 }
 
 impl Default for DirIterCfg {
     fn default() -> Self {
         Self {
-            skip_hidden: false,
-            skip_non_music_ext: true,
-            laxed_ext_mode: false,
+            ignore_hidden: false,
+            ignore_non_music_ext: true,
+            strict_mode: false,
         }
     }
 }
@@ -34,7 +34,7 @@ where
 {
     WalkDir::new(path)
         .into_iter()
-        .filter_entry(|entry| !cfg.skip_hidden || entry.is_hidden())
+        .filter_entry(|entry| !cfg.ignore_hidden || entry.is_hidden())
         .filter_map(|entry_res| entry_res.inspect_err(|e| tracing::warn!(?e)).ok())
         .filter(|entry| entry.is_suitable_file(cfg))
         .collect()
@@ -60,7 +60,7 @@ where
                     "found an entry with existing lrc extension, skipping"
                 );
                 None
-            } else if cfg.laxed_ext_mode {
+            } else if !cfg.strict_mode {
                 read_from_path(path)
                     .inspect_err(|e| tracing::warn!(?e))
                     .ok()
@@ -144,7 +144,7 @@ impl DirEntryExt for DirEntry {
             return false;
         }
 
-        if !cfg.skip_non_music_ext {
+        if !cfg.ignore_non_music_ext {
             return true;
         }
 
