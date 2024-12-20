@@ -1,5 +1,3 @@
-use tracing_subscriber::prelude::*;
-
 use crate::{remote::LyricsRequest, util::TraceLog};
 use ignore::WalkState;
 use lofty::{
