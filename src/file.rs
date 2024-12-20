@@ -7,7 +7,7 @@ use lofty::{
     read_from_path,
     tag::Accessor,
 };
-use std::{ffi::OsStr, fmt::Debug};
+use std::{ffi::OsStr, fmt::Debug, path::PathBuf};
 use std::{io, path::Path};
 
 #[derive(Debug)]
@@ -48,8 +48,12 @@ impl Default for FileMatchStrictness {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
-    #[error(transparent)]
-    Lofty(#[from] LoftyError),
+    #[error("underlying tagging error")]
+    Lofty {
+        path: PathBuf,
+        #[source]
+        src: LoftyError,
+    },
     #[error(transparent)]
     Io(io::Error),
     #[error(
@@ -108,21 +112,27 @@ where
     rx
 }
 
+#[tracing::instrument(level = "trace")]
 fn from_entry(
     entry: ignore::DirEntry,
     strictness: FileMatchStrictness,
 ) -> Result<Option<(LyricsRequest, ignore::DirEntry)>, PackError> {
     let path = entry.path();
 
+    if !path.is_file() {
+        tracing::debug!(?path, "entry is not a file");
+        return Ok(None);
+    }
+
     let ext_matches = path
         .extension()
-        .and_then(|ext| {
-            if !ext.eq_ignore_ascii_case("lrc") {
-                Some(ext)
-            } else {
+        .filter(|ext| {
+            let is_lrc = ext.eq_ignore_ascii_case("lrc");
+            if is_lrc {
                 tracing::info!(?path, "given path is an lrc file already, skipping");
-                None
             }
+
+            !is_lrc
         })
         .map(|ext| {
             ext.eq_ignore_ascii_case("aac")
@@ -136,22 +146,52 @@ fn from_entry(
         .unwrap_or(false);
 
     let tagged_file = match strictness {
-        FileMatchStrictness::Paranoid | FileMatchStrictness::TrustyGuesser if !ext_matches => {
-            Probe::open(path)
-                .inspect_err(|e| tracing::warn!(?e))?
-                .guess_file_type()
-                .inspect_err(|e| tracing::warn!(?e))
-                .map_err(PackError::Io)?
-                .read()
-                .inspect_err(|e| tracing::warn!(?e))?
+        FileMatchStrictness::Paranoid | FileMatchStrictness::FilterByExt if !ext_matches => {
+            tracing::debug!(?path, ?strictness, "entry didn't match");
+            return Ok(None);
         }
-        FileMatchStrictness::Paranoid => return Ok(None),
+
         FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
-            read_from_path(path).inspect_err(|e| tracing::warn!(?e))?
+            tracing::debug!(?path, ?strictness, ?ext_matches, "probing by extension");
+            shallow_inspect(path)?
+        }
+
+        FileMatchStrictness::Paranoid => {
+            tracing::debug!(?path, ?strictness, ?ext_matches, "deep probing");
+            deep_inspect(path)?
         }
     };
 
     Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
+}
+
+#[tracing::instrument]
+fn deep_inspect(path: &Path) -> Result<TaggedFile, PackError> {
+    Probe::open(path)
+        .inspect_err(|e| tracing::warn!(?e))
+        .map_err(|e| PackError::Lofty {
+            path: path.to_owned(),
+            src: e,
+        })?
+        .guess_file_type()
+        .inspect_err(|e| tracing::warn!(?e))
+        .map_err(PackError::Io)?
+        .read()
+        .inspect_err(|e| tracing::warn!(?e))
+        .map_err(|e| PackError::Lofty {
+            path: path.to_owned(),
+            src: e,
+        })
+}
+
+#[tracing::instrument]
+fn shallow_inspect(path: &Path) -> Result<TaggedFile, PackError> {
+    read_from_path(path)
+        .inspect_err(|e| tracing::warn!(?e))
+        .map_err(|e| PackError::Lofty {
+            path: path.to_owned(),
+            src: e,
+        })
 }
 
 #[tracing::instrument(level = "trace", skip(file))]

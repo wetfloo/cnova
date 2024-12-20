@@ -1,8 +1,7 @@
 use file::DirIterCfg;
 use std::{env, process, sync::Arc};
 use tokio::task::JoinSet;
-use tracing::Instrument;
-use tracing_subscriber::prelude::*;
+use tracing::{level_filters::LevelFilter, Instrument};
 use util::TraceErr;
 
 mod file;
@@ -12,10 +11,18 @@ mod util;
 #[tokio::main]
 #[tracing::instrument(level = "trace")]
 async fn main() {
-    let stdout_log = tracing_subscriber::fmt::layer().pretty();
-    let subscriber = tracing_subscriber::Registry::default().with(stdout_log);
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("unable to set global tracing subscriber");
+    const TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG: &str = "unable to set global tracing subscriber";
+    if cfg!(debug_assertions) {
+        let sub = tracing_subscriber::fmt()
+            .with_max_level(LevelFilter::DEBUG)
+            .finish();
+        tracing::subscriber::set_global_default(sub).expect(TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG);
+    } else {
+        let sub = tracing_subscriber::fmt()
+            .with_max_level(LevelFilter::INFO)
+            .finish();
+        tracing::subscriber::set_global_default(sub).expect(TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG);
+    }
 
     let dir_iter_cfg = DirIterCfg::default();
 
