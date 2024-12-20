@@ -1,7 +1,13 @@
 [package]
+authors = ["wetfloo <yahahaha.1234567890@gmail.com>"]
+categories = ["command-line-utilities", "multimedia::audio"]
 name = "cnova"
+description = "A command-line tool to download lyrics for music, quickly"
 version = "0.1.0"
 edition = "2021"
+
+[profile.release]
+lto = "thin"
 
 [dependencies]
 anyhow = "1.0.94"
