@@ -1,11 +1,11 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use clap::{crate_name, Parser, ValueEnum};
 
 #[derive(Debug, Parser)]
 #[command(name = crate_name!(), version, about)]
 pub struct Cli {
-    #[arg()]
+    #[arg(required = true)]
     pub paths: Vec<PathBuf>,
     #[arg(short = 'i', long, default_value_t = true)]
     pub ignore_hidden: bool,

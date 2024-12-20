@@ -43,10 +43,8 @@ async fn main() {
             unreachable!()
         }
     };
-    let rx = file::prepare_entries(&cli).unwrap_or_else(|_| {
-        eprintln!("no paths were provided");
-        process::exit(1)
-    });
+    let rx = file::prepare_entries(&cli)
+        .expect("the amount of paths provided has to be verified at the cli level");
 
     // async preparations
     let remote = Arc::new(remote);
