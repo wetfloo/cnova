@@ -56,9 +56,9 @@ where
     let (tx, rx) = crossbeam_channel::unbounded();
 
     let walk = ignore::WalkBuilder::new(path)
-        .ignore_case_insensitive(true) // TODO: put this into config, maybe?
+        .ignore_case_insensitive(true) // TODO (config): put this into config, maybe?
         .ignore(true)
-        .git_ignore(false) // TODO: is this even needed in context of music?
+        .git_ignore(false) // TODO (config): is this even needed in context of music?
         .git_global(false)
         .git_exclude(false)
         .require_git(true)
@@ -69,7 +69,7 @@ where
         let tx = tx.clone();
         Box::new(move |entry| {
             if let Some(pack) = entry
-                .inspect_err(|e| eprintln!("TODO {:?}", e))
+                .inspect_err(|e| eprintln!("TODO (tracing) {:?}", e))
                 .ok()
                 .filter(|entry| entry.file_type().map(|ft| ft.is_file()).unwrap_or(false))
                 .and_then(|entry| from_entry(entry, cfg.strictness).transpose())
@@ -101,7 +101,6 @@ pub enum PackError {
     },
 }
 
-// TODO: return results with options instead, once I get to making a custom error type
 fn from_entry(
     entry: ignore::DirEntry,
     strictness: FileMatchStrictness,
@@ -149,6 +148,7 @@ fn from_entry(
 }
 
 fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> {
+    // Have to do this, since TaggedFile is not Debug
     let _span = tracing::span!(tracing::Level::TRACE, "prepare_lyrics_request");
 
     let tags_slice = file.tags();
