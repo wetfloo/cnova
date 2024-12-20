@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use crate::util::TraceLog;
+
 mod url {
     use const_format::concatcp;
 
@@ -57,8 +59,8 @@ pub enum LyricsError {
     },
 }
 
-impl LyricsError {
-    pub fn trace(&self) {
+impl TraceLog for LyricsError {
+    fn trace_log(&self) {
         match self {
             Self::InvalidRequest(e) => tracing::error!(
                 ?e,

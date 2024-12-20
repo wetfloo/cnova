@@ -1,6 +1,6 @@
 use tracing_subscriber::prelude::*;
 
-use crate::remote::{LyricsRequest};
+use crate::remote::LyricsRequest;
 use ignore::WalkState;
 use lofty::{
     error::LoftyError,
@@ -50,10 +50,10 @@ impl Default for FileMatchStrictness {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
-    #[error("lofty error")]
+    #[error(transparent)]
     Lofty(#[from] LoftyError),
-    #[error("io error")]
-    Io(#[source] io::Error),
+    #[error(transparent)]
+    Io(io::Error),
     #[error(
         "failed to prepare a request. artist is {:?}, title is {:?}",
         artist,
@@ -63,6 +63,9 @@ pub enum PackError {
         artist: Option<String>,
         title: Option<String>,
     },
+    #[error(transparent)]
+    Ignore(ignore::Error),
+    // TODO (errors): add file match error
 }
 
 pub fn prepare_entries<P>(
@@ -84,17 +87,15 @@ where
         .follow_links(cfg.follow_symlinks)
         .hidden(cfg.ignore_hidden)
         .build_parallel();
+
     walk.run(move || {
         let tx = tx.clone();
         Box::new(move |entry| {
-            if let Some(pack) = entry
-                .inspect_err(|e| eprintln!("TODO (tracing) {:?}", e))
-                .ok()
-                .filter(|entry| entry.file_type().map(|ft| ft.is_file()).unwrap_or(false))
-                .and_then(|entry| from_entry(entry, cfg.strictness).transpose())
-            {
-                tx.send(pack).expect("this channel is unbounded, and, therefore, should always be available to send to");
-            };
+            if let Some(res) = entry
+                .map_err(PackError::Ignore)
+                .and_then(|entry| from_entry(entry, cfg.strictness)).transpose() {
+                    tx.send(res).expect("this channel is unbounded, and, therefore, should always be available to send to");
+                }
 
             WalkState::Continue
         })

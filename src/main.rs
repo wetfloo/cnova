@@ -3,9 +3,11 @@ use std::{env, process, sync::Arc};
 use tokio::task::JoinSet;
 use tracing::Instrument;
 use tracing_subscriber::prelude::*;
+use util::TraceErr;
 
 mod file;
 mod remote;
+mod util;
 
 #[tokio::main]
 #[tracing::instrument(level = "trace")]
@@ -48,7 +50,7 @@ async fn main() {
                 tracing::warn!(?path, "failed to update file path to `lrc` extension. this could mean that this entry is not a file");
             } else {
                 match response
-                    .inspect_err(|e| e.trace())
+                    .trace_err()
                     .ok()
                     .and_then(|response| response.synced_lyrics.or(response.plain_lyrics)) {
                     Some(lyrics) => tokio::fs::write(&path, &lyrics).await.inspect_err(|e|
