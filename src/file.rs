@@ -51,14 +51,14 @@ impl TraceLog for PackError {
 }
 
 pub type EntriesRx =
-    crossbeam_channel::Receiver<Result<(LyricsRequest, ignore::DirEntry), PackError>>;
+    tokio::sync::mpsc::UnboundedReceiver<Result<(LyricsRequest, ignore::DirEntry), PackError>>;
 
 #[derive(Debug, thiserror::Error)]
 #[error("no paths were provided")]
 pub struct NoPathsError;
 
 pub fn prepare_entries(cli: &Cli) -> Result<EntriesRx, NoPathsError> {
-    let (tx, rx) = crossbeam_channel::unbounded();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let mut iter = cli.paths.iter();
 
     let mut builder = ignore::WalkBuilder::new(iter.next().ok_or(NoPathsError)?);
@@ -85,6 +85,7 @@ pub fn prepare_entries(cli: &Cli) -> Result<EntriesRx, NoPathsError> {
             if let Some(res) = entry
                 .map_err(PackError::Ignore)
                 .and_then(|entry| from_entry(entry, cli)).transpose() {
+                    tracing::debug!(?res, "sending result over");
                     tx.send(res).expect("this channel is unbounded, and, therefore, should always be available to send to");
                 }
 
@@ -148,6 +149,7 @@ fn from_entry(
         }
     };
 
+    tracing::debug!(?path, "probing ok");
     Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
 }
 

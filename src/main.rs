@@ -43,7 +43,7 @@ async fn main() {
             unreachable!()
         }
     };
-    let rx = file::prepare_entries(&cli)
+    let mut rx = file::prepare_entries(&cli)
         .expect("the amount of paths provided has to be verified at the cli level");
 
     // async preparations
@@ -53,16 +53,15 @@ async fn main() {
     let semaphore = Arc::new(tokio::sync::Semaphore::new(cli.download_jobs.into()));
 
     // TODO: MASSIVE bottleneck here. Jobs don't come in until all files are processed, why???
-    for (request, dir_entry) in rx.into_iter().filter_map(|pack| pack.trace_err().ok()) {
+    while let Some((request, dir_entry)) = rx.recv().await.and_then(|res| res.trace_err().ok()) {
+        tracing::debug!(?request, ?dir_entry, "received new value");
+
         let remote = remote.clone();
-        let semaphore = semaphore.clone();
+        let permit = semaphore.clone().acquire_owned();
 
         join_set.spawn(
             async move {
-                let permit = semaphore
-                    .acquire_owned()
-                    .await
-                    .expect("semaphore closed unexpectedly");
+                let permit = permit.await.expect("semaphore closed unexpectedly");
                 let response = remote.get_lyrics(&request).await;
                 drop(permit); // manually drop to handle other tasks in this async block in the future
 
