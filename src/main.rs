@@ -30,12 +30,7 @@ async fn main() {
     // To not overload the site with insane number of requests
     let semaphore = Arc::new(tokio::sync::Semaphore::const_new(3));
 
-    for (request, dir_entry) in rx.into_iter().filter_map(|pack| {
-        pack.inspect_err(|e| {
-            eprintln!("TODO (tracing) {:?}", e);
-        })
-        .ok()
-    }) {
+    for (request, dir_entry) in rx.into_iter().filter_map(|pack| pack.trace_err().ok()) {
         let semaphore = semaphore.clone();
         join_set.spawn(async move {
             let permit = semaphore

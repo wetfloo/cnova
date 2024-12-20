@@ -1,6 +1,6 @@
 use tracing_subscriber::prelude::*;
 
-use crate::remote::LyricsRequest;
+use crate::{remote::LyricsRequest, util::TraceLog};
 use ignore::WalkState;
 use lofty::{
     error::LoftyError,
@@ -66,6 +66,12 @@ pub enum PackError {
     #[error(transparent)]
     Ignore(ignore::Error),
     // TODO (errors): add file match error
+}
+
+impl TraceLog for PackError {
+    fn trace_log(&self) {
+        tracing::warn!(?self);
+    }
 }
 
 pub fn prepare_entries<P>(
@@ -150,10 +156,8 @@ fn from_entry(
     Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
 }
 
+#[tracing::instrument(level = "trace", skip(file))]
 fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> {
-    // Have to do this, since TaggedFile is not Debug
-    let _span = tracing::span!(tracing::Level::TRACE, "prepare_lyrics_request");
-
     let tags_slice = file.tags();
 
     let artist = tags_slice
