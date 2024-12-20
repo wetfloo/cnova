@@ -1,4 +1,8 @@
-use crate::{remote::LyricsRequest, util::TraceLog};
+use crate::{
+    cli::{Cli, FileMatchStrictness},
+    remote::LyricsRequest,
+    util::TraceLog,
+};
 use ignore::WalkState;
 use lofty::{
     error::LoftyError,
@@ -7,38 +11,8 @@ use lofty::{
     read_from_path,
     tag::Accessor,
 };
-use std::{ffi::OsStr, fmt::Debug, path::PathBuf};
+use std::{fmt::Debug, path::PathBuf};
 use std::{io, path::Path};
-
-#[derive(Debug)]
-pub struct DirIterCfg<'a, 'b: 'a> {
-    pub ignore_hidden: bool,
-    pub ignore_non_music_ext: bool,
-    pub strictness: FileMatchStrictness,
-    pub plain_ignore_files: bool,
-    pub follow_symlinks: bool,
-    pub ignored_file_exts: &'a [&'b OsStr],
-}
-
-impl Default for DirIterCfg<'_, '_> {
-    fn default() -> Self {
-        Self {
-            ignore_hidden: false,
-            ignore_non_music_ext: true,
-            strictness: Default::default(),
-            follow_symlinks: true,
-            plain_ignore_files: true,
-            ignored_file_exts: [].as_slice(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum FileMatchStrictness {
-    TrustyGuesser,
-    FilterByExt,
-    Paranoid,
-}
 
 impl Default for FileMatchStrictness {
     fn default() -> Self {
@@ -76,24 +50,32 @@ impl TraceLog for PackError {
     }
 }
 
-pub fn prepare_entries<P>(
-    path: P,
-    cfg: &DirIterCfg,
-) -> crossbeam_channel::Receiver<Result<(LyricsRequest, ignore::DirEntry), PackError>>
-where
-    P: AsRef<Path> + Debug,
-{
-    let (tx, rx) = crossbeam_channel::unbounded();
+pub type EntriesRx =
+    crossbeam_channel::Receiver<Result<(LyricsRequest, ignore::DirEntry), PackError>>;
 
-    let walk = ignore::WalkBuilder::new(path)
+#[derive(Debug, thiserror::Error)]
+#[error("no paths were provided")]
+pub struct NoPathsError;
+
+pub fn prepare_entries(cli: &Cli) -> Result<EntriesRx, NoPathsError> {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    let mut iter = cli.paths.iter();
+
+    let mut builder = ignore::WalkBuilder::new(iter.next().ok_or(NoPathsError)?);
+
+    for path in iter {
+        builder.add(path);
+    }
+
+    let walk = builder
         .ignore_case_insensitive(true) // TODO (config): put this into config, maybe?
         .ignore(true)
         .git_ignore(false) // TODO (config): is this even needed in context of music?
         .git_global(false)
         .git_exclude(false)
         .require_git(true)
-        .follow_links(cfg.follow_symlinks)
-        .hidden(cfg.ignore_hidden)
+        .follow_links(cli.follow_symlinks)
+        .hidden(cli.ignore_hidden)
         .build_parallel();
 
     walk.run(move || {
@@ -101,7 +83,7 @@ where
         Box::new(move |entry| {
             if let Some(res) = entry
                 .map_err(PackError::Ignore)
-                .and_then(|entry| from_entry(entry, cfg.strictness)).transpose() {
+                .and_then(|entry| from_entry(entry, cli)).transpose() {
                     tx.send(res).expect("this channel is unbounded, and, therefore, should always be available to send to");
                 }
 
@@ -109,13 +91,13 @@ where
         })
     });
 
-    rx
+    Ok(rx)
 }
 
 #[tracing::instrument(level = "trace")]
 fn from_entry(
     entry: ignore::DirEntry,
-    strictness: FileMatchStrictness,
+    cli: &Cli,
 ) -> Result<Option<(LyricsRequest, ignore::DirEntry)>, PackError> {
     let path = entry.path();
 
@@ -124,16 +106,19 @@ fn from_entry(
         return Ok(None);
     }
 
+    if !cli.overwrite_lrc_files {
+        let mut path = path.to_owned();
+        if path.set_extension("lrc") && path.exists() {
+            tracing::info!(
+                ?path,
+                "not overwriting an existing lrc file for a corresponding path",
+            );
+            return Ok(None);
+        }
+    }
+
     let ext_matches = path
         .extension()
-        .filter(|ext| {
-            let is_lrc = ext.eq_ignore_ascii_case("lrc");
-            if is_lrc {
-                tracing::info!(?path, "given path is an lrc file already, skipping");
-            }
-
-            !is_lrc
-        })
         .map(|ext| {
             ext.eq_ignore_ascii_case("aac")
                 || ext.eq_ignore_ascii_case("alac")
@@ -145,19 +130,19 @@ fn from_entry(
         })
         .unwrap_or(false);
 
-    let tagged_file = match strictness {
+    let tagged_file = match cli.strictness {
         FileMatchStrictness::Paranoid | FileMatchStrictness::FilterByExt if !ext_matches => {
-            tracing::debug!(?path, ?strictness, "entry didn't match");
+            tracing::debug!(?path, ?cli.strictness, "entry didn't match");
             return Ok(None);
         }
 
         FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
-            tracing::debug!(?path, ?strictness, ?ext_matches, "probing by extension");
+            tracing::debug!(?path, ?cli.strictness, ?ext_matches, "probing by extension");
             shallow_inspect(path)?
         }
 
         FileMatchStrictness::Paranoid => {
-            tracing::debug!(?path, ?strictness, ?ext_matches, "deep probing");
+            tracing::debug!(?path, ?cli.strictness, ?ext_matches, "deep probing");
             deep_inspect(path)?
         }
     };

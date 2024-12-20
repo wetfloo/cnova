@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.94"
+clap = { version = "4.5.23", features = ["unstable-doc", "derive", "cargo"] }
 const_format = { version = "0.2.34", features = ["fmt", "rust_1_83"] }
 crossbeam-channel = "0.5.14"
 ignore = "0.4.23"

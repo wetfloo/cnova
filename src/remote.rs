@@ -1,6 +1,5 @@
 use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use crate::util::TraceLog;
@@ -11,8 +10,6 @@ mod url {
     const BASE: &str = "https://lrclib.net/api/";
     pub const GET: &str = concatcp!(BASE, "get");
 }
-
-static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| client_init().unwrap());
 
 #[derive(Debug, Serialize)]
 pub struct LyricsRequest {
@@ -80,53 +77,68 @@ impl TraceLog for LyricsError {
     }
 }
 
-#[tracing::instrument(level = "trace")]
-pub async fn get_lyrics(req: &LyricsRequest) -> Result<LyricsResponse, LyricsError> {
-    tracing::trace!("building request");
-    let request = CLIENT
-        .get(url::GET)
-        .query(req)
-        .build()
-        .map_err(LyricsError::InvalidRequest)
-        .inspect_err(|e| tracing::error!(?req, ?e, "the given request {:?} is not valid", e))?;
+pub struct Remote {
+    client: reqwest::Client,
+}
 
-    tracing::trace!("requesting the value");
-    CLIENT
-        .execute(request)
-        .await
-        .map_err(|e| e.into())
-        .and_then(|response| {
-            let status = response.status();
-            if status.is_success() {
-                Ok(response)
-            } else {
-                Err(LyricsError::InvalidStatusCode {
-                    status,
-                    url: url::GET,
-                })
-            }
-        })?
-        .json()
-        .await
-        .map_err(|e| e.into())
+impl Remote {
+    pub fn new<U>(proxy: Option<U>) -> Result<Self, RemoteInitError>
+    where
+        U: reqwest::IntoUrl,
+    {
+        let proxy = proxy
+            .map(|p| Proxy::all(p).map_err(RemoteInitError::ProxyError))
+            .transpose()?;
+        let mut builder = reqwest::ClientBuilder::new().timeout(Duration::from_secs(10));
+        if let Some(proxy) = proxy {
+            builder = builder.proxy(proxy);
+        }
+
+        builder
+            .build()
+            .map(|client| Self { client })
+            .map_err(|e| e.into())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn get_lyrics(&self, req: &LyricsRequest) -> Result<LyricsResponse, LyricsError> {
+        tracing::trace!("building request");
+        let request = self
+            .client
+            .get(url::GET)
+            .query(req)
+            .build()
+            .map_err(LyricsError::InvalidRequest)
+            .inspect_err(|e| tracing::error!(?req, ?e, "the given request {:?} is not valid", e))?;
+
+        tracing::trace!("requesting the value");
+        self.client
+            .execute(request)
+            .await
+            .map_err(|e| e.into())
+            .and_then(|response| {
+                let status = response.status();
+                if status.is_success() {
+                    Ok(response)
+                } else {
+                    Err(LyricsError::InvalidStatusCode {
+                        status,
+                        url: url::GET,
+                    })
+                }
+            })?
+            .json()
+            .await
+            .map_err(|e| e.into())
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
-enum ClientInitErr {
+pub enum RemoteInitError {
     #[error("entered proxy address is not valid")]
     ProxyError(#[source] reqwest::Error),
     #[error("failed to build client")]
     Misc(#[from] reqwest::Error),
-}
-
-#[inline(always)]
-fn client_init() -> Result<reqwest::Client, ClientInitErr> {
-    let proxy = Proxy::all("socks5://127.0.0.1:2080").map_err(ClientInitErr::ProxyError)?;
-    reqwest::ClientBuilder::new()
-        .proxy(proxy)
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.into())
 }
 
 mod duration_secs {
