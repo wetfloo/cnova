@@ -20,6 +20,19 @@ pub struct DirIterCfg<'a, 'b: 'a> {
     pub ignored_file_exts: &'a [&'b OsStr],
 }
 
+impl Default for DirIterCfg<'_, '_> {
+    fn default() -> Self {
+        Self {
+            ignore_hidden: false,
+            ignore_non_music_ext: true,
+            strictness: Default::default(),
+            follow_symlinks: true,
+            plain_ignore_files: true,
+            ignored_file_exts: [].as_slice(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum FileMatchStrictness {
     TrustyGuesser,
@@ -33,17 +46,21 @@ impl Default for FileMatchStrictness {
     }
 }
 
-impl Default for DirIterCfg<'_, '_> {
-    fn default() -> Self {
-        Self {
-            ignore_hidden: false,
-            ignore_non_music_ext: true,
-            strictness: Default::default(),
-            follow_symlinks: true,
-            plain_ignore_files: true,
-            ignored_file_exts: [].as_slice(),
-        }
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum PackError {
+    #[error("lofty error")]
+    Lofty(#[from] LoftyError),
+    #[error("io error")]
+    Io(#[source] io::Error),
+    #[error(
+        "failed to prepare a request. artist is {:?}, title is {:?}",
+        artist,
+        title
+    )]
+    RequestPrepare {
+        artist: Option<String>,
+        title: Option<String>,
+    },
 }
 
 pub fn prepare_entries<P>(
@@ -82,23 +99,6 @@ where
     });
 
     rx
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum PackError {
-    #[error("lofty error")]
-    Lofty(#[from] LoftyError),
-    #[error("io error")]
-    Io(#[source] io::Error),
-    #[error(
-        "failed to prepare a request. artist is {:?}, title is {:?}",
-        artist,
-        title
-    )]
-    RequestPrepare {
-        artist: Option<String>,
-        title: Option<String>,
-    },
 }
 
 fn from_entry(
