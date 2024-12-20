@@ -30,8 +30,12 @@ async fn main() {
 
     for (request, dir_entry) in rx
         .into_iter()
-        // TODO: do something with the result
-        .filter_map(|pack| pack.ok().map(|pack| pack.into()))
+        .filter_map(|pack| {
+            pack.inspect_err(|e| {
+                eprintln!("TODO {:?}", e);
+            })
+            .ok()
+        })
     {
         let semaphore = semaphore.clone();
         join_set.spawn(async move {
@@ -49,10 +53,10 @@ async fn main() {
                 match response
                     .inspect_err(|e| {
                         match e {
-                            remote::LyricsError::InvalidRequest(e) => tracing::error!(?e, "this is bad, please report this to the developer"),
+                            remote::LyricsError::InvalidRequest(e) => tracing::error!(?e, "built an invalid request, this is bad, please report this to the developer"),
                             remote::LyricsError::Misc(e) => tracing::warn!(?e, "misc request error"),
                             remote::LyricsError::InvalidStatusCode { status, url } => if *status == StatusCode::NOT_FOUND {
-                                // TODO: save this info somewhere and don't try to attempt to get
+                                // TODO (caching): save this info somewhere and don't try to attempt to get
                                 // the song lyrics
                                 tracing::info!(?e, "lyrics not found");
                             } else {

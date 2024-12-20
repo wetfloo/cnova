@@ -49,7 +49,7 @@ impl Default for DirIterCfg<'_, '_> {
 pub fn prepare_v2<P>(
     path: P,
     cfg: &DirIterCfg,
-) -> crossbeam_channel::Receiver<Result<Pack, PackError>>
+) -> crossbeam_channel::Receiver<Result<(LyricsRequest, ignore::DirEntry), PackError>>
 where
     P: AsRef<Path> + Debug,
 {
@@ -72,7 +72,7 @@ where
                 .inspect_err(|e| eprintln!("TODO {:?}", e))
                 .ok()
                 .filter(|entry| entry.file_type().map(|ft| ft.is_file()).unwrap_or(false))
-                .and_then(|entry| Pack::from_entry(entry, cfg.strictness).transpose())
+                .and_then(|entry| from_entry(entry, cfg.strictness).transpose())
             {
                 tx.send(pack).expect("this channel is unbounded, and, therefore, should always be available to send to");
             };
@@ -82,15 +82,6 @@ where
     });
 
     rx
-}
-
-#[derive(Debug)]
-pub struct Pack(LyricsRequest, ignore::DirEntry);
-
-impl From<Pack> for (LyricsRequest, ignore::DirEntry) {
-    fn from(value: Pack) -> Self {
-        (value.0, value.1)
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -110,53 +101,51 @@ pub enum PackError {
     },
 }
 
-impl Pack {
-    // TODO: return results with options instead, once I get to making a custom error type
-    fn from_entry(
-        entry: ignore::DirEntry,
-        strictness: FileMatchStrictness,
-    ) -> Result<Option<Self>, PackError> {
-        let path = entry.path();
+// TODO: return results with options instead, once I get to making a custom error type
+fn from_entry(
+    entry: ignore::DirEntry,
+    strictness: FileMatchStrictness,
+) -> Result<Option<(LyricsRequest, ignore::DirEntry)>, PackError> {
+    let path = entry.path();
 
-        let ext_matches = path
-            .extension()
-            .and_then(|ext| {
-                if !ext.eq_ignore_ascii_case("lrc") {
-                    Some(ext)
-                } else {
-                    tracing::info!(?path, "given path is an lrc file already, skipping");
-                    None
-                }
-            })
-            .map(|ext| {
-                ext.eq_ignore_ascii_case("aac")
-                    || ext.eq_ignore_ascii_case("alac")
-                    || ext.eq_ignore_ascii_case("flac")
-                    || ext.eq_ignore_ascii_case("mp3")
-                    || ext.eq_ignore_ascii_case("ogg")
-                    || ext.eq_ignore_ascii_case("opus")
-                    || ext.eq_ignore_ascii_case("wav")
-            })
-            .unwrap_or(false);
-
-        let tagged_file = match strictness {
-            FileMatchStrictness::Paranoid | FileMatchStrictness::TrustyGuesser if !ext_matches => {
-                Probe::open(path)
-                    .inspect_err(|e| tracing::warn!(?e))?
-                    .guess_file_type()
-                    .inspect_err(|e| tracing::warn!(?e))
-                    .map_err(PackError::Io)?
-                    .read()
-                    .inspect_err(|e| tracing::warn!(?e))?
+    let ext_matches = path
+        .extension()
+        .and_then(|ext| {
+            if !ext.eq_ignore_ascii_case("lrc") {
+                Some(ext)
+            } else {
+                tracing::info!(?path, "given path is an lrc file already, skipping");
+                None
             }
-            FileMatchStrictness::Paranoid => return Ok(None),
-            FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
-                read_from_path(path).inspect_err(|e| tracing::warn!(?e))?
-            }
-        };
+        })
+        .map(|ext| {
+            ext.eq_ignore_ascii_case("aac")
+                || ext.eq_ignore_ascii_case("alac")
+                || ext.eq_ignore_ascii_case("flac")
+                || ext.eq_ignore_ascii_case("mp3")
+                || ext.eq_ignore_ascii_case("ogg")
+                || ext.eq_ignore_ascii_case("opus")
+                || ext.eq_ignore_ascii_case("wav")
+        })
+        .unwrap_or(false);
 
-        Ok(Some(Self(prepare_lyrics_request(tagged_file)?, entry)))
-    }
+    let tagged_file = match strictness {
+        FileMatchStrictness::Paranoid | FileMatchStrictness::TrustyGuesser if !ext_matches => {
+            Probe::open(path)
+                .inspect_err(|e| tracing::warn!(?e))?
+                .guess_file_type()
+                .inspect_err(|e| tracing::warn!(?e))
+                .map_err(PackError::Io)?
+                .read()
+                .inspect_err(|e| tracing::warn!(?e))?
+        }
+        FileMatchStrictness::Paranoid => return Ok(None),
+        FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
+            read_from_path(path).inspect_err(|e| tracing::warn!(?e))?
+        }
+    };
+
+    Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
 }
 
 fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> {
