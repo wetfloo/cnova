@@ -76,6 +76,7 @@ pub fn prepare_entries(cli: &Cli) -> Result<EntriesRx, NoPathsError> {
         .require_git(true)
         .follow_links(cli.follow_symlinks)
         .hidden(cli.ignore_hidden)
+        .threads(cli.traversal_jobs.into())
         .build_parallel();
 
     walk.run(move || {
