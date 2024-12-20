@@ -22,7 +22,7 @@ async fn main() {
         process::exit(1);
     });
 
-    let rx = file::prepare_v2(file_path, &dir_iter_cfg);
+    let rx = file::prepare_entries(file_path, &dir_iter_cfg);
 
     let mut join_set = JoinSet::new();
     // To not overload the site with insane number of requests

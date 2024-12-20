@@ -46,7 +46,7 @@ impl Default for DirIterCfg<'_, '_> {
     }
 }
 
-pub fn prepare_v2<P>(
+pub fn prepare_entries<P>(
     path: P,
     cfg: &DirIterCfg,
 ) -> crossbeam_channel::Receiver<Result<(LyricsRequest, ignore::DirEntry), PackError>>
