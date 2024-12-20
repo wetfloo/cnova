@@ -104,7 +104,7 @@ pub enum PackError {
         artist,
         title
     )]
-    RequestPrepareError {
+    RequestPrepare {
         artist: Option<String>,
         title: Option<String>,
     },
@@ -195,7 +195,7 @@ fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> 
     let (title, artist) = match (title, artist) {
         (Some(title), Some(artist)) => (title, artist),
         (title_opt, artist_opt) => {
-            return Err(PackError::RequestPrepareError {
+            return Err(PackError::RequestPrepare {
                 artist: artist_opt,
                 title: title_opt,
             })
