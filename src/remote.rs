@@ -1,4 +1,4 @@
-use reqwest::Proxy;
+use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -55,6 +55,27 @@ pub enum LyricsError {
         status: reqwest::StatusCode,
         url: &'static str,
     },
+}
+
+impl LyricsError {
+    pub fn trace(&self) {
+        match self {
+            Self::InvalidRequest(e) => tracing::error!(
+                ?e,
+                "built an invalid request, this is bad, please report this to the developer"
+            ),
+            Self::Misc(e) => tracing::warn!(?e, "misc request error"),
+            Self::InvalidStatusCode { status, url } => {
+                if *status == StatusCode::NOT_FOUND {
+                    // TODO (caching): save this info somewhere and don't try to attempt to get
+                    // the song lyrics
+                    tracing::info!(?url, "lyrics not found");
+                } else {
+                    tracing::warn!(?url, "received http error");
+                }
+            }
+        }
+    }
 }
 
 #[tracing::instrument(level = "trace")]

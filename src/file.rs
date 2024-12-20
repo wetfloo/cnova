@@ -1,4 +1,6 @@
-use crate::remote::LyricsRequest;
+use tracing_subscriber::prelude::*;
+
+use crate::remote::{LyricsRequest};
 use ignore::WalkState;
 use lofty::{
     error::LoftyError,

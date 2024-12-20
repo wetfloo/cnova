@@ -1,7 +1,7 @@
 use file::DirIterCfg;
-use reqwest::StatusCode;
 use std::{env, process, sync::Arc};
 use tokio::task::JoinSet;
+use tracing::Instrument;
 use tracing_subscriber::prelude::*;
 
 mod file;
@@ -48,20 +48,7 @@ async fn main() {
                 tracing::warn!(?path, "failed to update file path to `lrc` extension. this could mean that this entry is not a file");
             } else {
                 match response
-                    .inspect_err(|e| {
-                        match e {
-                            remote::LyricsError::InvalidRequest(e) => tracing::error!(?e, "built an invalid request, this is bad, please report this to the developer"),
-                            remote::LyricsError::Misc(e) => tracing::warn!(?e, "misc request error"),
-                            remote::LyricsError::InvalidStatusCode { status, url } => if *status == StatusCode::NOT_FOUND {
-                                // TODO (caching): save this info somewhere and don't try to attempt to get
-                                // the song lyrics
-                                tracing::info!(?e, "lyrics not found");
-                            } else {
-                                tracing::warn!(?e, ?url, "received http error");
-                            },
-                        }
-                        tracing::warn!(?e, "got hit with response error")
-                    })
+                    .inspect_err(|e| e.trace())
                     .ok()
                     .and_then(|response| response.synced_lyrics.or(response.plain_lyrics)) {
                     Some(lyrics) => tokio::fs::write(&path, &lyrics).await.inspect_err(|e|
@@ -70,7 +57,7 @@ async fn main() {
                     None => tracing::info!(?request, "couldn\'t extract lyrics"),
                 }
             }
-        });
+        }.in_current_span());
     }
 
     join_set.join_all().await;
