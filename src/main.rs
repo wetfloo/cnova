@@ -15,8 +15,11 @@ mod util;
 #[tokio::main]
 #[tracing::instrument(level = "trace")]
 async fn main() {
+    const JOIN_HANDLE_EXPECT_MSG: &str =
+        "seems like child job panicked. we shouldn't ever panic like that!";
     // tracing
     const TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG: &str = "unable to set global tracing subscriber";
+
     if cfg!(debug_assertions) {
         let sub = tracing_subscriber::fmt()
             .with_max_level(LevelFilter::DEBUG)
@@ -48,9 +51,9 @@ async fn main() {
             .expect("the amount of paths provided has to be verified at the cli level");
     })
     .await
-    .unwrap();
+    .expect(JOIN_HANDLE_EXPECT_MSG);
 
-    handle.await.unwrap();
+    handle.await.expect(JOIN_HANDLE_EXPECT_MSG);
 }
 
 async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>, rx: &mut PacksRx) {
