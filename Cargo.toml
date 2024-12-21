@@ -1,8 +1,13 @@
 [package]
 authors = ["wetfloo <yahahaha.1234567890@gmail.com>"]
 categories = ["command-line-utilities", "multimedia::audio"]
+keywords = ["cli", "music", "audio", "lrc"]
 name = "cnova"
 description = "A command-line tool to download lyrics for music, quickly"
+license = "MIT"
+homepage = "https://github.com/wetfloo/cnova"
+repository = "https://github.com/wetfloo/cnova"
+readme = "README.md"
 version = "0.1.0"
 edition = "2021"
 
