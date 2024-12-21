@@ -50,15 +50,14 @@ impl TraceLog for PackError {
     }
 }
 
-pub type EntriesRx =
-    tokio::sync::mpsc::UnboundedReceiver<Result<(LyricsRequest, ignore::DirEntry), PackError>>;
+pub type PackResult = Result<(LyricsRequest, ignore::DirEntry), PackError>;
+pub type EntriesTx = tokio::sync::mpsc::UnboundedSender<PackResult>;
 
 #[derive(Debug, thiserror::Error)]
 #[error("no paths were provided")]
 pub struct NoPathsError;
 
-pub fn prepare_entries(cli: &Cli) -> Result<EntriesRx, NoPathsError> {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+pub fn prepare_entries(tx: &EntriesTx, cli: &Cli) -> Result<(), NoPathsError> {
     let mut iter = cli.paths.iter();
 
     let mut builder = ignore::WalkBuilder::new(iter.next().ok_or(NoPathsError)?);
@@ -93,7 +92,7 @@ pub fn prepare_entries(cli: &Cli) -> Result<EntriesRx, NoPathsError> {
         })
     });
 
-    Ok(rx)
+    Ok(())
 }
 
 #[tracing::instrument(level = "trace")]
