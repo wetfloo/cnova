@@ -1,7 +1,7 @@
 use clap::Parser as _;
 use cli::Cli;
-use remote::{Remote, RemoteInitError};
-use std::{process, sync::Arc};
+use remote::Remote;
+use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{level_filters::LevelFilter, Instrument};
 use util::TraceErr;
@@ -32,19 +32,11 @@ async fn main() {
     let cli = Cli::parse();
 
     // basic entities that depend on cli
-    let remote = match (Remote::new(cli.proxy.as_ref()), cli.proxy.as_ref()) {
-        (Ok(remote), _) => remote,
-        (Err(RemoteInitError::Misc(e)), _) => panic!("{:?}", e),
-        (Err(RemoteInitError::ProxyError(_)), Some(proxy)) => {
-            eprintln!("{} is not a valid proxy string", proxy);
-            process::exit(1)
-        }
-        (Err(RemoteInitError::ProxyError(_)), None) => {
-            unreachable!()
-        }
-    };
     let mut rx = file::prepare_entries(&cli)
         .expect("the amount of paths provided has to be verified at the cli level");
+    let remote = Remote::new(cli.proxy)
+        .expect("couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?",
+    );
 
     // async preparations
     let remote = Arc::new(remote);

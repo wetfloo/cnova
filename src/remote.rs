@@ -82,22 +82,15 @@ pub struct Remote {
 }
 
 impl Remote {
-    pub fn new<U>(proxy: Option<U>) -> Result<Self, RemoteInitError>
-    where
-        U: reqwest::IntoUrl,
-    {
-        let proxy = proxy
-            .map(|p| Proxy::all(p).map_err(RemoteInitError::ProxyError))
-            .transpose()?;
+    pub fn new(proxy: Option<Proxy>) -> Result<Self, reqwest::Error> {
         let mut builder = reqwest::ClientBuilder::new().timeout(Duration::from_secs(10));
-        if let Some(proxy) = proxy {
-            builder = builder.proxy(proxy);
-        }
+        builder = if let Some(proxy) = proxy {
+            builder.proxy(proxy)
+        } else {
+            builder.no_proxy()
+        };
 
-        builder
-            .build()
-            .map(|client| Self { client })
-            .map_err(|e| e.into())
+        builder.build().map(|client| Self { client })
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -131,14 +124,6 @@ impl Remote {
             .await
             .map_err(|e| e.into())
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum RemoteInitError {
-    #[error("entered proxy address is not valid")]
-    ProxyError(#[source] reqwest::Error),
-    #[error("failed to build client")]
-    Misc(#[from] reqwest::Error),
 }
 
 mod duration_secs {

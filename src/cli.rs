@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{crate_name, value_parser, Parser, ValueEnum};
+use reqwest::Proxy;
 
 #[derive(Debug, Parser)]
 #[command(name = crate_name!(), version, about)]
@@ -43,8 +44,12 @@ pub struct Cli {
     pub traversal_jobs: u16,
 
     /// Proxy setting, supports SOCKS5, SOCKS4 and HTTP proxies
-    #[arg(short, long)]
-    pub proxy: Option<String>,
+    #[arg(short, long, value_parser = proxy)]
+    pub proxy: Option<reqwest::Proxy>,
+}
+
+fn proxy(s: &str) -> Result<Proxy, String> {
+    Proxy::all(s).map_err(|_| "invalid proxy string".to_string())
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
