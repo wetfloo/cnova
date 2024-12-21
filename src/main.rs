@@ -1,11 +1,12 @@
 use clap::Parser as _;
 use cli::Cli;
 use file::{PackResult, PacksRx};
-use remote::Remote;
+use remote::{LyricsError, LyricsResponse, Remote};
+use reqwest::StatusCode;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{level_filters::LevelFilter, Instrument};
-use util::TraceErr;
+use util::{TraceErr as _, TraceLog as _};
 
 mod cli;
 mod file;
@@ -79,16 +80,45 @@ async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>,
                         path.set_extension("lrc"),
                         "at this stage, we should always be able to update extensions on files"
                     );
-                    match response
-                        .trace_err()
-                        .ok()
-                        .and_then(|response| response.synced_lyrics.or(response.plain_lyrics))
-                    {
-                        Some(lyrics) => tokio::fs::write(&path, &lyrics)
-                            .await
-                            .inspect_err(|e| tracing::error!(?e, "failed to write to a file"))
-                            .unwrap_or_default(),
-                        None => tracing::info!(?request, ?path, "couldn\'t extract lyrics"),
+
+                    match response {
+                        Ok(
+                            LyricsResponse {
+                                synced_lyrics: Some(lyrics),
+                                instrumental: Some(false) | None,
+                                ..
+                            }
+                            | LyricsResponse {
+                                plain_lyrics: Some(lyrics),
+                                instrumental: Some(false) | None,
+                                ..
+                            },
+                        ) => match tokio::fs::write(&path, &lyrics).await {
+                            Ok(()) => tracing::info!(?path, "successfully created lyrics file"),
+                            Err(e) => tracing::warn!(?e, "failed to write to lyrics file"),
+                        },
+
+                        Err(LyricsError::InvalidStatusCode {
+                            status: StatusCode::NOT_FOUND,
+                            url: _,
+                        })
+                        | Ok(_) => {
+                            let mut path = path.to_owned();
+                            tracing::info!(?request, ?response, ?path, "couldn\'t extract lyrics");
+
+                            if !path.set_extension("nolrc") {
+                                tracing::warn!(?path, "failed to update file extension on path");
+                            } else {
+                                match tokio::fs::File::create_new(&path).await {
+                                    Ok(_) => tracing::info!("successfully created nolrc file"),
+                                    Err(e) => tracing::warn!(?e, "failed to create nolrc file"),
+                                }
+                            }
+                        }
+
+                        Err(e) => {
+                            e.trace_log();
+                        }
                     }
                 }
                 .in_current_span(),
