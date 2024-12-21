@@ -31,3 +31,6 @@ tracing-subscriber = "0.3.19"
 
 [dev-dependencies]
 tempfile = "3.14.0"
+
+[target.'cfg(all(target_os = "linux", any(target_env = "musl", not(any(target_arch = "x86", target_arch = "x86_64")))))'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
