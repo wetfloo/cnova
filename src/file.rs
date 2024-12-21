@@ -201,14 +201,8 @@ fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> 
         .map(|cow| cow.into_owned());
     let duration = None; // TODO
 
-    if title.is_none() {
-        tracing::warn!("title couldn't be read");
-    }
-    if artist.is_none() {
-        tracing::warn!("artist couldn't be read");
-    }
-    if album.is_none() {
-        tracing::warn!("album couldn't be read");
+    if title.is_none() || artist.is_none() || album.is_none() {
+        tracing::warn!(?artist, ?title, ?album, "common tag couldn't be read");
     }
     // TODO
     //if duration.is_none() {
