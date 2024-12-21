@@ -3,7 +3,7 @@ use cli::Cli;
 use file::{PackResult, PacksRx};
 use remote::{LyricsError, LyricsResponse, Remote};
 use reqwest::StatusCode;
-use std::sync::Arc;
+use std::{io, path::PathBuf, sync::Arc};
 use tokio::task::JoinSet;
 use tracing::{level_filters::LevelFilter, Instrument};
 use util::{TraceErr as _, TraceLog as _};
@@ -93,9 +93,11 @@ async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>,
                                 instrumental: Some(false) | None,
                                 ..
                             },
-                        ) => match tokio::fs::write(&path, &lyrics).await {
-                            Ok(()) => tracing::info!(?path, "successfully created lyrics file"),
-                            Err(e) => tracing::warn!(?e, "failed to write to lyrics file"),
+                        ) => match replace_nolrc(&mut path, &lyrics).await {
+                            Ok(()) => (),
+                            Err(ReplaceNolrcError::Delete(e)) if e.kind() == io::ErrorKind::NotFound => tracing::trace!(?path, "nolrc file not found"),
+                            Err(ReplaceNolrcError::Write(e)) => tracing::warn!(?path, ?e, "failed to write to lyrics file"),
+                            Err(ReplaceNolrcError::Delete(e)) => tracing::warn!(?path, ?e, "failed to delete existing nolrc file"),
                         },
 
                         Err(LyricsError::InvalidStatusCode {
@@ -106,13 +108,14 @@ async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>,
                             let mut path = path.to_owned();
                             tracing::info!(?request, ?response, ?path, "couldn\'t extract lyrics");
 
-                            if !path.set_extension("nolrc") {
-                                tracing::warn!(?path, "failed to update file extension on path");
-                            } else {
-                                match tokio::fs::File::create_new(&path).await {
-                                    Ok(_) => tracing::info!("successfully created nolrc file"),
-                                    Err(e) => tracing::warn!(?e, "failed to create nolrc file"),
-                                }
+                            assert!(
+                                path.set_extension("nolrc"),
+                                "at this stage, we should always be able to update extensions on files"
+                            );
+                            match tokio::fs::File::create_new(&path).await.map_err(|e| e.kind()) {
+                                Ok(_file) => tracing::info!(?path, "successfully created nolrc file"),
+                                Err(io::ErrorKind::AlreadyExists) => tracing::trace!("skipping creation of nolrc file, since it exists"),
+                                Err(e) => tracing::warn!(?e, "failed to create nolrc file"),
                             }
                         }
 
@@ -127,4 +130,29 @@ async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>,
     }
 
     join_set.join_all().await;
+}
+
+#[derive(Debug, thiserror::Error)]
+enum ReplaceNolrcError {
+    #[error("failed to write to lrc file")]
+    Write(#[from] io::Error),
+    #[error("failed to delete nolrc file")]
+    Delete(#[source] io::Error),
+}
+
+#[tracing::instrument(level = "trace", skip(lyrics))]
+async fn replace_nolrc<C>(path: &mut PathBuf, lyrics: C) -> Result<(), ReplaceNolrcError>
+where
+    C: AsRef<[u8]>,
+{
+    tokio::fs::write(&path, &lyrics).await?;
+    tracing::info!(?path, "successfully wrote lyrics file");
+
+    path.set_extension("nolrc");
+    tokio::fs::remove_file(&path)
+        .await
+        .map_err(ReplaceNolrcError::Delete)?;
+    tracing::info!(?path, "successfully removed nolrc file");
+
+    Ok(())
 }
