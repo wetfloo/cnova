@@ -7,8 +7,8 @@ use reqwest::Proxy;
 #[command(name = crate_name!(), version, about)]
 pub struct Cli {
     /// Paths to scan. Could be a mix files or directories. If it's a directory, this program will
-    /// traverse it recursively and download LRC files, reporting any errors along the way. If it's
-    /// a file, will download a corresponding LRC file for it
+    /// traverse it recursively and download .lrc files, reporting any errors along the way. If it's
+    /// a file, will download a corresponding .lrc file for it
     #[arg(required = true)]
     pub paths: Vec<PathBuf>,
 
@@ -20,9 +20,8 @@ pub struct Cli {
     #[arg(short = 's', long, default_value_t = true)]
     pub follow_symlinks: bool,
 
-    /// If true, will attempt to re-download an existing LRC file
-    #[arg(long, default_value_t = false)]
-    pub overwrite_lrc_files: bool,
+    #[arg(short = 'l', long, value_enum, default_value_t = LrcAcquireBehavior::LrcMissing)]
+    pub lrc_acquire_behavior: LrcAcquireBehavior,
 
     /// File matching strictness level
     #[arg(long, value_enum, default_value_t = FileMatchStrictness::FilterByExt)]
@@ -60,4 +59,18 @@ pub enum FileMatchStrictness {
     FilterByExt,
     /// Don't trust file extensions, read directly into them. Might take process to read files
     Paranoid,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum LrcAcquireBehavior {
+    /// Attempt to download lyrics for every track, even if a corresponding .lrc or .nolrc is present
+    All,
+    /// Download for all tracks that have a corresponding .lrc file, excluding tracks that
+    /// have a corresponding .nolrc file
+    OverwriteExceptNolrc,
+    /// Download for all tracks that don't have a corresponding .lrc file, including tracks that
+    /// have a corresponding .nolrc file
+    LrcMissingAll,
+    /// Download for all tracks that don't have a corresponding .lrc file or .nolrc file
+    LrcMissing,
 }

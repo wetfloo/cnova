@@ -1,5 +1,5 @@
 use crate::{
-    cli::{Cli, FileMatchStrictness},
+    cli::{Cli, FileMatchStrictness, LrcAcquireBehavior},
     remote::LyricsRequest,
     util::TraceLog,
 };
@@ -109,16 +109,18 @@ fn from_entry(
         return Ok(None);
     }
 
-    if !cli.overwrite_lrc_files {
-        let mut path = path.to_owned();
-        if path.set_extension("lrc") && path.exists() {
-            tracing::info!(
-                ?path,
-                "not overwriting an existing lrc file for a corresponding path",
-            );
-            return Ok(None);
-        }
+    let mut path = path.to_owned();
+    let filter_pass = match cli.lrc_acquire_behavior {
+        LrcAcquireBehavior::All => true,
+        LrcAcquireBehavior::OverwriteExceptNolrc => !has_nolrc(&mut path),
+        LrcAcquireBehavior::LrcMissingAll => !has_lrc(&mut path),
+        LrcAcquireBehavior::LrcMissing => !has_lrc(&mut path) && !has_nolrc(&mut path),
+    };
+    if !filter_pass {
+        return Ok(None);
     }
+
+    let path = entry.path();
 
     let ext_matches = path
         .extension()
@@ -152,6 +154,32 @@ fn from_entry(
 
     tracing::debug!(?path, "probing ok");
     Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
+}
+
+#[tracing::instrument]
+fn has_lrc(path: &mut PathBuf) -> bool {
+    let res = path.set_extension("lrc") && path.exists();
+    if res {
+        tracing::info!(
+            ?path,
+            "not fetching lyrics for a file with corresponding .lrc file",
+        );
+    }
+
+    res
+}
+
+#[tracing::instrument]
+fn has_nolrc(path: &mut PathBuf) -> bool {
+    let res = path.set_extension("nolrc") && path.exists();
+    if res {
+        tracing::info!(
+            ?path,
+            "not fetching lyrics for a file with corresponding .nolrc file",
+        );
+    }
+
+    res
 }
 
 #[tracing::instrument]
