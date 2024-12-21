@@ -75,8 +75,8 @@ pub fn prepare_entries(tx: &PacksTx, cli: &Cli) -> Result<(), NoPathsError> {
         .git_global(false)
         .git_exclude(false)
         .require_git(true)
-        .follow_links(cli.follow_symlinks)
-        .hidden(cli.ignore_hidden)
+        .follow_links(!cli.no_follow_symlinks)
+        .hidden(!cli.no_ignore_hidden)
         .threads(cli.traversal_jobs.into())
         .build_parallel();
 

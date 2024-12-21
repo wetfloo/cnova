@@ -44,7 +44,7 @@ async fn main() {
     let semaphore = Arc::new(tokio::sync::Semaphore::new(cli.download_jobs.into()));
 
     let handle = tokio::spawn(async move {
-        handle_all(remote, semaphore, &mut rx).await;
+        handle_all(remote, semaphore, &mut rx, cli.deny_nolrc).await;
     });
 
     tokio::task::spawn_blocking(move || {
@@ -58,7 +58,12 @@ async fn main() {
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>, rx: &mut PacksRx) {
+async fn handle_all(
+    remote: Arc<Remote>,
+    semaphore: Arc<tokio::sync::Semaphore>,
+    rx: &mut PacksRx,
+    deny_nolrc: bool,
+) {
     let mut join_set = JoinSet::new();
 
     while let Some(res) = rx.recv().await {
@@ -104,7 +109,7 @@ async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>,
                             status: StatusCode::NOT_FOUND,
                             url: _,
                         })
-                        | Ok(_) => {
+                        | Ok(_) => if !deny_nolrc {
                             let mut path = path.to_owned();
                             tracing::info!(?request, ?response, ?path, "couldn\'t extract lyrics");
 
@@ -117,6 +122,8 @@ async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>,
                                 Err(io::ErrorKind::AlreadyExists) => tracing::trace!("skipping creation of nolrc file, since it exists"),
                                 Err(e) => tracing::warn!(?e, "failed to create nolrc file"),
                             }
+                        } else {
+                            tracing::trace!(?path, ?deny_nolrc, "not writing nolrc file")
                         }
 
                         Err(e) => {

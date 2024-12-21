@@ -12,16 +12,23 @@ pub struct Cli {
     #[arg(required = true)]
     pub paths: Vec<PathBuf>,
 
-    /// Ignore hidden files and directories
-    #[arg(short = 'i', long, default_value_t = true)]
-    pub ignore_hidden: bool,
+    /// Don't ignore hidden files and directories
+    #[arg(short = 'i', long)]
+    pub no_ignore_hidden: bool,
 
-    /// Follow symlinks
-    #[arg(short = 's', long, default_value_t = true)]
-    pub follow_symlinks: bool,
+    /// Don't follow symlinks
+    #[arg(short = 's', long)]
+    pub no_follow_symlinks: bool,
 
+    /// .lrc file acquisition behavior
     #[arg(short = 'l', long, value_enum, default_value_t = LrcAcquireBehavior::LrcMissing)]
     pub lrc_acquire_behavior: LrcAcquireBehavior,
+
+    /// Allows the program to create .nolrc files, in order to prevent requesting lyrics from the
+    /// same songs in the future, making the process faster if you keep a large library. As a
+    /// downside, you get a lot of empty .nolrc files
+    #[arg(long)]
+    pub deny_nolrc: bool,
 
     /// File matching strictness level
     #[arg(long, value_enum, default_value_t = FileMatchStrictness::FilterByExt)]
