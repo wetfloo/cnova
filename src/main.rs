@@ -56,6 +56,7 @@ async fn main() {
     handle.await.expect(JOIN_HANDLE_EXPECT_MSG);
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>, rx: &mut PacksRx) {
     let mut join_set = JoinSet::new();
 
