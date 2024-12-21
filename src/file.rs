@@ -51,6 +51,8 @@ impl TraceLog for PackError {
 }
 
 pub type PackResult = Result<(LyricsRequest, ignore::DirEntry), PackError>;
+// TODO: rename
+pub type EntriesRx = tokio::sync::mpsc::UnboundedReceiver<PackResult>;
 pub type EntriesTx = tokio::sync::mpsc::UnboundedSender<PackResult>;
 
 #[derive(Debug, thiserror::Error)]
