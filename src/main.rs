@@ -1,6 +1,6 @@
 use clap::Parser as _;
 use cli::Cli;
-use file::{EntriesRx, PackResult};
+use file::{PackResult, PacksRx};
 use remote::Remote;
 use std::sync::Arc;
 use tokio::task::JoinSet;
@@ -53,11 +53,7 @@ async fn main() {
     handle.await.unwrap();
 }
 
-async fn handle_all(
-    remote: Arc<Remote>,
-    semaphore: Arc<tokio::sync::Semaphore>,
-    rx: &mut EntriesRx,
-) {
+async fn handle_all(remote: Arc<Remote>, semaphore: Arc<tokio::sync::Semaphore>, rx: &mut PacksRx) {
     let mut join_set = JoinSet::new();
 
     while let Some(res) = rx.recv().await {
