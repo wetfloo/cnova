@@ -8,22 +8,19 @@ license = "MIT"
 homepage = "https://github.com/wetfloo/cnova"
 repository = "https://github.com/wetfloo/cnova"
 readme = "README.md"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [profile.release]
 lto = "thin"
 
 [dependencies]
-anyhow = "1.0.94"
 clap = { version = "4.5.23", features = ["unstable-doc", "derive", "cargo"] }
 const_format = { version = "0.2.34", features = ["fmt", "rust_1_83"] }
-crossbeam-channel = "0.5.14"
 ignore = "0.4.23"
 indoc = "2.0.5"
 lofty = "0.21.1"
 lrc = "0.1.8"
-rayon = "1.10.0"
 reqwest = { version = "0.12.9", features = ["json", "socks"] }
 serde = { version = "1.0.216", features = ["derive"] }
 serde_json = "1.0.133"
