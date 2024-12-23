@@ -1,3 +1,4 @@
+use core::fmt;
 use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -43,11 +44,29 @@ pub struct LyricsResponse {
     pub synced_lyrics: Option<String>,
 }
 
+impl fmt::Display for LyricsResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "title: {}, artist: {}, ", self.title, self.artist)?;
+
+        let lyrics = self
+            .synced_lyrics
+            .as_ref()
+            .or(self.plain_lyrics.as_ref())
+            .filter(|_| !self.instrumental.unwrap_or(false));
+        match lyrics {
+            Some(_lyrics) => f.write_str("LYRICS PRESENT")?,
+            None => f.write_str("NO LYRICS")?,
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum LyricsError {
-    #[error("invalid Reqwest request")]
+    #[error("invalid Reqwest request, THIS ONE IS BAD")]
     InvalidRequest(#[source] reqwest::Error),
-    #[error(transparent)]
+    #[error("reqwest error: {0}")]
     Misc(#[from] reqwest::Error),
     #[error("invalid status code {status} from url {url}")]
     InvalidStatusCode {

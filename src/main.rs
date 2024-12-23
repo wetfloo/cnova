@@ -6,7 +6,7 @@ use reqwest::StatusCode;
 use std::{future::Future, io, path::PathBuf, sync::Arc};
 use tokio::task::JoinSet;
 use tracing::level_filters::LevelFilter;
-use util::{TraceErr as _, TraceLog as _};
+use util::{ResultExt as _, TraceErr as _, TraceLog as _};
 
 mod cli;
 mod file;
@@ -127,7 +127,7 @@ async fn foo<P>(
         })
         | Ok(_) => {
             if !deny_nolrc {
-                tracing::info!(?response, path = %path.display(), "couldn\'t extract lyrics");
+                tracing::info!(r = %response.trace(), path = %path.display(), "couldn\'t extract lyrics");
 
                 match crate_nolrc(&mut path.to_owned())
                     .await
