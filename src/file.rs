@@ -105,7 +105,7 @@ fn from_entry(
     let path = entry.path();
 
     if !path.is_file() {
-        tracing::trace!(path = %path.display(), "entry is not a file");
+        tracing::debug!("entry is not a file");
         return Ok(None);
     }
 
@@ -137,17 +137,17 @@ fn from_entry(
 
     let tagged_file = match cli.strictness {
         FileMatchStrictness::Paranoid | FileMatchStrictness::FilterByExt if !ext_matches => {
-            tracing::debug!(path = %path.display(), ?cli.strictness, "entry didn't match");
+            tracing::debug!("entry didn't match");
             return Ok(None);
         }
 
         FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
-            tracing::debug!(path = %path.display(), ?cli.strictness, ?ext_matches, "probing by extension");
+            tracing::debug!(?ext_matches, "probing by extension");
             shallow_inspect(path)?
         }
 
         FileMatchStrictness::Paranoid => {
-            tracing::debug!(path = %path.display(), ?cli.strictness, ?ext_matches, "deep probing");
+            tracing::debug!(?ext_matches, "deep probing");
             deep_inspect(path)?
         }
     };
@@ -182,7 +182,6 @@ fn has_nolrc(path: &mut PathBuf) -> bool {
     res
 }
 
-#[tracing::instrument]
 fn deep_inspect(path: &Path) -> Result<TaggedFile, PackError> {
     Probe::open(path)
         .inspect_err(|e| tracing::warn!(?e))
@@ -201,7 +200,6 @@ fn deep_inspect(path: &Path) -> Result<TaggedFile, PackError> {
         })
 }
 
-#[tracing::instrument]
 fn shallow_inspect(path: &Path) -> Result<TaggedFile, PackError> {
     read_from_path(path)
         .inspect_err(|e| tracing::warn!(?e))

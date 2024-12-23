@@ -80,7 +80,7 @@ async fn handle_all(
     join_set.join_all().await;
 }
 
-#[tracing::instrument(level = "trace", skip(permit, remote))]
+#[tracing::instrument(level = "trace", skip_all)]
 async fn foo<P>(
     permit: P,
     remote: Arc<Remote>,
@@ -127,7 +127,7 @@ async fn foo<P>(
         })
         | Ok(_) => {
             if !deny_nolrc {
-                tracing::info!(?request, ?response, path = %path.display(), "couldn\'t extract lyrics");
+                tracing::info!(?response, path = %path.display(), "couldn\'t extract lyrics");
 
                 match crate_nolrc(&mut path.to_owned())
                     .await
@@ -162,11 +162,12 @@ enum ReplaceNolrcError {
     Delete(#[source] io::Error),
 }
 
-#[tracing::instrument(level = "trace", skip(lyrics))]
+#[tracing::instrument(level = "trace", skip_all)]
 async fn replace_nolrc<C>(path: &mut PathBuf, lyrics: C) -> Result<(), ReplaceNolrcError>
 where
     C: AsRef<[u8]>,
 {
+    // TODO (tracing): This tracing is handled here, but...
     path.set_extension("lrc");
     tokio::fs::write(&path, &lyrics).await?;
     tracing::info!(path = %path.display(), "successfully wrote lyrics file");
@@ -182,6 +183,7 @@ where
 
 #[tracing::instrument(level = "trace")]
 async fn crate_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> {
+    // ...this is handled by the caller, like wtf?
     path.set_extension("nolrc");
     tokio::fs::OpenOptions::new()
         .create(true)
