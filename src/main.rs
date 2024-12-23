@@ -79,12 +79,7 @@ async fn handle_all(
                     let response = remote.get_lyrics(&request).await;
                     drop(permit); // manually drop to handle other tasks in this async block in the future
 
-                    let mut path = dir_entry.into_path();
-
-                    assert!(
-                        path.set_extension("lrc"),
-                        "at this stage, we should always be able to update extensions on files"
-                    );
+                    let path = dir_entry.path();
 
                     match response {
                         Ok(
@@ -98,32 +93,39 @@ async fn handle_all(
                                 instrumental: Some(false) | None,
                                 ..
                             },
-                        ) => match replace_nolrc(&mut path, &lyrics).await {
+                        ) => match replace_nolrc(&mut path.to_owned(), &lyrics).await {
                             Ok(()) => (),
-                            Err(ReplaceNolrcError::Delete(e)) if e.kind() == io::ErrorKind::NotFound => tracing::trace!(?path, "nolrc file not found"),
-                            Err(ReplaceNolrcError::Write(e)) => tracing::warn!(?path, ?e, "failed to write to lyrics file"),
-                            Err(ReplaceNolrcError::Delete(e)) => tracing::warn!(?path, ?e, "failed to delete existing nolrc file"),
+                            Err(ReplaceNolrcError::Delete(e))
+                                if e.kind() == io::ErrorKind::NotFound =>
+                            {
+                                tracing::trace!(?path, "nolrc file not found")
+                            }
+                            Err(ReplaceNolrcError::Write(e)) => {
+                                tracing::warn!(?path, ?e, "failed to write to lyrics file")
+                            }
+                            Err(ReplaceNolrcError::Delete(e)) => {
+                                tracing::warn!(?path, ?e, "failed to delete existing nolrc file")
+                            }
                         },
 
                         Err(LyricsError::InvalidStatusCode {
                             status: StatusCode::NOT_FOUND,
                             url: _,
                         })
-                        | Ok(_) => if !deny_nolrc {
-                            let mut path = path.to_owned();
-                            tracing::info!(?request, ?response, ?path, "couldn\'t extract lyrics");
+                        | Ok(_) => {
+                            if !deny_nolrc {
+                                tracing::info!(
+                                    ?request,
+                                    ?response,
+                                    ?path,
+                                    "couldn\'t extract lyrics"
+                                );
 
-                            assert!(
-                                path.set_extension("nolrc"),
-                                "at this stage, we should always be able to update extensions on files"
-                            );
-                            match tokio::fs::File::create_new(&path).await.map_err(|e| e.kind()) {
-                                Ok(_file) => tracing::info!(?path, "successfully created nolrc file"),
-                                Err(io::ErrorKind::AlreadyExists) => tracing::trace!("skipping creation of nolrc file, since it exists"),
-                                Err(e) => tracing::warn!(?e, "failed to create nolrc file"),
+                                // We've logged in a function
+                                let _res = crate_nolrc(&mut path.to_owned()).await;
+                            } else {
+                                tracing::trace!(?path, ?deny_nolrc, "not writing nolrc file")
                             }
-                        } else {
-                            tracing::trace!(?path, ?deny_nolrc, "not writing nolrc file")
                         }
 
                         Err(e) => {
@@ -152,6 +154,7 @@ async fn replace_nolrc<C>(path: &mut PathBuf, lyrics: C) -> Result<(), ReplaceNo
 where
     C: AsRef<[u8]>,
 {
+    path.set_extension("lrc");
     tokio::fs::write(&path, &lyrics).await?;
     tracing::info!(?path, "successfully wrote lyrics file");
 
@@ -162,4 +165,23 @@ where
     tracing::info!(?path, "successfully removed nolrc file");
 
     Ok(())
+}
+
+#[tracing::instrument(level = "trace")]
+async fn crate_nolrc(path: &mut PathBuf) -> Result<(), io::Error> {
+    path.set_extension("nolrc");
+    tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&path)
+        .await
+        .inspect(|_| tracing::info!(path = %path.display(), "successfully created nolrc file"))
+        .map(|_| ())
+        .inspect_err(|e| match e.kind() {
+            io::ErrorKind::AlreadyExists => {
+                tracing::trace!(?path, "skipping creation of nolrc file, since it exists",)
+            }
+            kind => tracing::warn!(?kind, ?path, "failed to create nolrc file"),
+        })
 }
