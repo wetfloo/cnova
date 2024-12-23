@@ -105,7 +105,7 @@ fn from_entry(
     let path = entry.path();
 
     if !path.is_file() {
-        tracing::debug!(?path, "entry is not a file");
+        tracing::debug!(path = %path.display(), "entry is not a file");
         return Ok(None);
     }
 
@@ -137,22 +137,22 @@ fn from_entry(
 
     let tagged_file = match cli.strictness {
         FileMatchStrictness::Paranoid | FileMatchStrictness::FilterByExt if !ext_matches => {
-            tracing::debug!(?path, ?cli.strictness, "entry didn't match");
+            tracing::debug!(path = %path.display(), ?cli.strictness, "entry didn't match");
             return Ok(None);
         }
 
         FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
-            tracing::debug!(?path, ?cli.strictness, ?ext_matches, "probing by extension");
+            tracing::debug!(path = %path.display(), ?cli.strictness, ?ext_matches, "probing by extension");
             shallow_inspect(path)?
         }
 
         FileMatchStrictness::Paranoid => {
-            tracing::debug!(?path, ?cli.strictness, ?ext_matches, "deep probing");
+            tracing::debug!(path = %path.display(), ?cli.strictness, ?ext_matches, "deep probing");
             deep_inspect(path)?
         }
     };
 
-    tracing::debug!(?path, "probing ok");
+    tracing::debug!(path = %path.display(), "probing ok");
     Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
 }
 
@@ -161,7 +161,7 @@ fn has_lrc(path: &mut PathBuf) -> bool {
     let res = path.set_extension("lrc") && path.exists();
     if res {
         tracing::info!(
-            ?path,
+            path = %path.display(),
             "not fetching lyrics for a file with corresponding .lrc file",
         );
     }
@@ -174,7 +174,7 @@ fn has_nolrc(path: &mut PathBuf) -> bool {
     let res = path.set_extension("nolrc") && path.exists();
     if res {
         tracing::info!(
-            ?path,
+            path = %path.display(),
             "not fetching lyrics for a file with corresponding .nolrc file",
         );
     }
