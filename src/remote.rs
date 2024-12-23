@@ -47,7 +47,7 @@ pub struct LyricsResponse {
 pub enum LyricsError {
     #[error("invalid Reqwest request")]
     InvalidRequest(#[source] reqwest::Error),
-    #[error("an error occured")]
+    #[error(transparent)]
     Misc(#[from] reqwest::Error),
     #[error("invalid status code {status} from url {url}")]
     InvalidStatusCode {
