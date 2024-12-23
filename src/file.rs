@@ -156,7 +156,7 @@ fn from_entry(
     Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "trace", skip(path))]
 fn has_lrc(path: &mut PathBuf) -> bool {
     let res = path.set_extension("lrc") && path.exists();
     if res {
@@ -169,7 +169,7 @@ fn has_lrc(path: &mut PathBuf) -> bool {
     res
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "trace", skip(path))]
 fn has_nolrc(path: &mut PathBuf) -> bool {
     let res = path.set_extension("nolrc") && path.exists();
     if res {
