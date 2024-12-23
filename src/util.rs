@@ -10,6 +10,13 @@ pub trait TraceErr {
     fn trace_err(self) -> Self;
 }
 
+pub trait ResultExt {
+    type T;
+    type E;
+
+    fn trace(&self) -> ResultTrace<Self::T, Self::E>;
+}
+
 // TODO (tracing): delete this
 impl<T, E> TraceErr for Result<T, E>
 where
@@ -39,13 +46,6 @@ impl<'a, T, E> From<&'a Result<T, E>> for ResultTrace<'a, T, E> {
     fn from(value: &'a Result<T, E>) -> Self {
         Self(value)
     }
-}
-
-pub trait ResultExt {
-    type T;
-    type E;
-
-    fn trace(&self) -> ResultTrace<Self::T, Self::E>;
 }
 
 impl<T, E> ResultExt for Result<T, E> {
