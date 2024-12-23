@@ -121,8 +121,11 @@ async fn handle_all(
                                     "couldn\'t extract lyrics"
                                 );
 
-                                // We've logged in a function
-                                let _res = crate_nolrc(&mut path.to_owned()).await;
+                                match crate_nolrc(&mut path.to_owned()).await.map_err(|e| e.kind()) {
+                                    Ok(_file) => tracing::info!(path = %path.display(), "successfully created nolrc file"),
+                                    Err(io::ErrorKind::AlreadyExists) => tracing::trace!(?path, "skipping creation of nolrc file, since it exists"),
+                                    Err(kind) => tracing::warn!(?kind, ?path, "failed to create nolrc file"),
+                                }
                             } else {
                                 tracing::trace!(?path, ?deny_nolrc, "not writing nolrc file")
                             }
@@ -168,7 +171,7 @@ where
 }
 
 #[tracing::instrument(level = "trace")]
-async fn crate_nolrc(path: &mut PathBuf) -> Result<(), io::Error> {
+async fn crate_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> {
     path.set_extension("nolrc");
     tokio::fs::OpenOptions::new()
         .create(true)
@@ -176,12 +179,4 @@ async fn crate_nolrc(path: &mut PathBuf) -> Result<(), io::Error> {
         .truncate(false)
         .open(&path)
         .await
-        .inspect(|_| tracing::info!(path = %path.display(), "successfully created nolrc file"))
-        .map(|_| ())
-        .inspect_err(|e| match e.kind() {
-            io::ErrorKind::AlreadyExists => {
-                tracing::trace!(?path, "skipping creation of nolrc file, since it exists",)
-            }
-            kind => tracing::warn!(?kind, ?path, "failed to create nolrc file"),
-        })
 }
