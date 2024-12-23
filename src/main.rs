@@ -144,7 +144,7 @@ async fn foo<P>(
                     }
                 }
             } else {
-                tracing::debug!(path = %path.display(), ?deny_nolrc, "not writing nolrc file")
+                tracing::debug!(path = %path.display(), "not writing nolrc file")
             }
         }
 
