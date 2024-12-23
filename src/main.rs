@@ -111,7 +111,7 @@ async fn foo<P>(
         ) => match replace_nolrc(&mut path.to_owned(), &lyrics).await {
             Ok(()) => (),
             Err(ReplaceNolrcError::Delete(e)) if e.kind() == io::ErrorKind::NotFound => {
-                tracing::trace!(path = %path.display(), "nolrc file not found")
+                tracing::debug!(path = %path.display(), "nolrc file not found")
             }
             Err(ReplaceNolrcError::Write(e)) => {
                 tracing::warn!(path = %path.display(), ?e, "failed to write to lyrics file")
@@ -137,14 +137,14 @@ async fn foo<P>(
                         tracing::info!(path = %path.display(), "successfully created nolrc file")
                     }
                     Err(io::ErrorKind::AlreadyExists) => {
-                        tracing::trace!(path = %path.display(), "skipping creation of nolrc file, since it exists")
+                        tracing::debug!(path = %path.display(), "skipping creation of nolrc file, since it exists")
                     }
                     Err(kind) => {
                         tracing::warn!(path = %path.display(), ?kind, "failed to create nolrc file")
                     }
                 }
             } else {
-                tracing::trace!(path = %path.display(), ?deny_nolrc, "not writing nolrc file")
+                tracing::debug!(path = %path.display(), ?deny_nolrc, "not writing nolrc file")
             }
         }
 

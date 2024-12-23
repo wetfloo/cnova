@@ -86,7 +86,7 @@ pub fn prepare_entries(tx: &PacksTx, cli: &Cli) -> Result<(), NoPathsError> {
             if let Some(res) = entry
                 .map_err(PackError::Ignore)
                 .and_then(|entry| from_entry(entry, cli)).transpose() {
-                    tracing::debug!(?res, "sending result over");
+                    tracing::trace!(?res, "sending result over");
                     tx.send(res).expect("this channel is unbounded, and, therefore, should always be available to send to");
                 }
 
@@ -105,7 +105,7 @@ fn from_entry(
     let path = entry.path();
 
     if !path.is_file() {
-        tracing::debug!(path = %path.display(), "entry is not a file");
+        tracing::trace!(path = %path.display(), "entry is not a file");
         return Ok(None);
     }
 
@@ -152,7 +152,7 @@ fn from_entry(
         }
     };
 
-    tracing::debug!(path = %path.display(), "probing ok");
+    tracing::trace!(path = %path.display(), "probing ok");
     Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
 }
 
