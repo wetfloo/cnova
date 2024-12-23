@@ -30,9 +30,9 @@ pub struct LyricsRequest {
 pub struct LyricsResponse {
     pub id: Option<u64>,
     #[serde(rename = "trackName")]
-    pub title: Option<String>,
+    pub title: String,
     #[serde(rename = "artistName")]
-    pub artist: Option<String>,
+    pub artist: String,
     #[serde(rename = "albumName")]
     pub album: Option<String>,
     #[serde(with = "duration_secs")]
@@ -246,8 +246,8 @@ mod test {
         assert_eq!(
             LyricsResponse {
                 id: Some(42069),
-                title: Some("title".to_owned()),
-                artist: Some("artist".to_owned()),
+                title: "title".to_owned(),
+                artist: "artist".to_owned(),
                 album: Some("album".to_owned()),
                 duration: Some(Duration::from_secs(300)),
                 instrumental: Some(true),
@@ -277,8 +277,8 @@ mod test {
         assert_eq!(
             LyricsResponse {
                 id: Some(42069),
-                title: Some("title".to_owned()),
-                artist: Some("artist".to_owned()),
+                title: "title".to_owned(),
+                artist: "artist".to_owned(),
                 album: Some("album".to_owned()),
                 duration: Some(Duration::from_secs(300)),
                 instrumental: Some(true),
