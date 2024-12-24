@@ -75,7 +75,7 @@ async fn handle_all(
             let remote = remote.clone();
             let permit = semaphore.clone().acquire_owned();
 
-            join_set.spawn(foo(permit, remote, request, dir_entry, deny_nolrc));
+            join_set.spawn(handle_entry(permit, remote, request, dir_entry, deny_nolrc));
         }
     }
 
@@ -83,8 +83,7 @@ async fn handle_all(
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-// TODO: rename (i forgor)
-async fn foo<P>(
+async fn handle_entry<P>(
     permit: P,
     remote: Arc<Remote>,
     request: LyricsRequest,
