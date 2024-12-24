@@ -63,7 +63,7 @@ impl fmt::Display for LyricsResponse {
 pub enum LyricsError {
     #[error("invalid Reqwest request, THIS ONE IS BAD! {0:?}")]
     InvalidRequest(#[source] reqwest::Error),
-    #[error("request error: {0}")]
+    #[error(transparent)]
     Misc(#[from] reqwest::Error),
     #[error("invalid status code {status} from url {url}")]
     InvalidStatusCode {
@@ -96,8 +96,7 @@ impl Remote {
             .get(url::GET)
             .query(req)
             .build()
-            .map_err(LyricsError::InvalidRequest)
-            .inspect_err(|e| tracing::error!(?req, ?e, "the given request {:?} is not valid", e))?;
+            .map_err(LyricsError::InvalidRequest)?;
 
         tracing::trace!("requesting the value");
         self.client

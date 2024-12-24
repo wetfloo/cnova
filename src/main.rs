@@ -5,7 +5,6 @@ use remote::{LyricsError, LyricsRequest, LyricsResponse, Remote};
 use reqwest::StatusCode;
 use std::{future::Future, io, path::PathBuf, sync::Arc};
 use tokio::task::JoinSet;
-use trace::TraceExt as _;
 use tracing::level_filters::LevelFilter;
 
 mod cli;
@@ -121,15 +120,18 @@ async fn handle_entry<P>(
             }
         },
 
+        // TODO: separate instrumental and tracks with no lyrics available (at this moment)
         Err(LyricsError::InvalidStatusCode {
             status: StatusCode::NOT_FOUND,
             url: _,
         })
         | Ok(_) => {
             if !deny_nolrc {
-                tracing::info!(r = %response.trace(), path = %path.display(), "couldn\'t extract lyrics");
+                // TODO (caching): save this info somewhere and don't try to attempt to get
+                // the song lyrics
+                tracing::info!(path = %path.display(), "no lyrics found");
 
-                match crate_nolrc(&mut path.to_owned())
+                match create_nolrc(&mut path.to_owned())
                     .await
                     .map_err(|e| e.kind())
                 {
@@ -148,28 +150,23 @@ async fn handle_entry<P>(
             }
         }
 
-        Err(e) => {
-            match e {
-                LyricsError::InvalidRequest(_) => tracing::error!( %e),
-                LyricsError::Misc(e) => tracing::warn!(%e),
-                LyricsError::InvalidStatusCode { status, url } => {
-                    if status == StatusCode::NOT_FOUND {
-                        // TODO (caching): save this info somewhere and don't try to attempt to get
-                        // the song lyrics
-                        tracing::info!(%url, "lyrics not found");
-                    } else {
-                        tracing::warn!(%e);
-                    }
-                }
+        Err(e) => match e {
+            LyricsError::InvalidRequest(e) => {
+                panic!(
+                    "constructed invalid request! this is not supposed to happen, ever. {:?}",
+                    e
+                )
             }
-        }
+            LyricsError::Misc(e) => tracing::warn!(%e),
+            LyricsError::InvalidStatusCode { .. } => tracing::warn!(%e),
+        },
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 enum ReplaceNolrcError {
     #[error("failed to write to lrc file")]
-    Write(#[from] io::Error),
+    Write(#[source] io::Error),
     #[error("failed to delete nolrc file")]
     Delete(#[source] io::Error),
 }
@@ -181,7 +178,9 @@ where
 {
     // TODO (tracing): This tracing is handled here, but...
     path.set_extension("lrc");
-    tokio::fs::write(&path, &lyrics).await?;
+    tokio::fs::write(&path, &lyrics)
+        .await
+        .map_err(ReplaceNolrcError::Write)?;
     tracing::info!(path = %path.display(), "successfully wrote lyrics file");
 
     path.set_extension("nolrc");
@@ -194,7 +193,7 @@ where
 }
 
 #[tracing::instrument(level = "trace")]
-async fn crate_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> {
+async fn create_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> {
     // TODO (tracing) ...this is handled by the caller, like wtf?
     path.set_extension("nolrc");
     tokio::fs::OpenOptions::new()

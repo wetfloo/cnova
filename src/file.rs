@@ -22,15 +22,10 @@ impl Default for FileMatchStrictness {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
-    #[error("underlying tagging error")]
-    Lofty {
-        // TODO: remove
-        path: PathBuf,
-        #[source]
-        src: LoftyError,
-    },
-    #[error("io error {0}")]
-    Io(#[source] io::Error),
+    #[error(transparent)]
+    Lofty(#[from] LoftyError),
+    #[error(transparent)]
+    Io(#[from] io::Error),
     #[error(
         "failed to prepare a request. artist is {}, title is {}",
         artist.trace(),
@@ -40,8 +35,8 @@ pub enum PackError {
         artist: Option<String>,
         title: Option<String>,
     },
-    #[error("ignore error {0}")]
-    Ignore(ignore::Error),
+    #[error(transparent)]
+    Ignore(#[from] ignore::Error),
     // TODO (errors): add file match error
 }
 
@@ -79,7 +74,7 @@ pub fn prepare_entries(tx: &PacksTx, cli: &Cli) -> Result<(), NoPathsError> {
         let tx = tx.clone();
         Box::new(move |entry| {
             if let Some(res) = entry
-                .map_err(PackError::Ignore)
+                .map_err(|e| e.into())
                 .and_then(|entry| from_entry(entry, cli)).transpose() {
                     tracing::trace!(?res, "sending result over");
                     tx.send(res).expect("this channel is unbounded, and, therefore, should always be available to send to");
@@ -178,30 +173,11 @@ fn has_nolrc(path: &mut PathBuf) -> bool {
 }
 
 fn deep_inspect(path: &Path) -> Result<TaggedFile, PackError> {
-    Probe::open(path)
-        .inspect_err(|e| tracing::warn!(?e))
-        .map_err(|e| PackError::Lofty {
-            path: path.to_owned(),
-            src: e,
-        })?
-        .guess_file_type()
-        .inspect_err(|e| tracing::warn!(?e))
-        .map_err(PackError::Io)?
-        .read()
-        .inspect_err(|e| tracing::warn!(?e))
-        .map_err(|e| PackError::Lofty {
-            path: path.to_owned(),
-            src: e,
-        })
+    Ok(Probe::open(path)?.guess_file_type()?.read()?)
 }
 
 fn shallow_inspect(path: &Path) -> Result<TaggedFile, PackError> {
-    read_from_path(path)
-        .inspect_err(|e| tracing::warn!(?e))
-        .map_err(|e| PackError::Lofty {
-            path: path.to_owned(),
-            src: e,
-        })
+    Ok(read_from_path(path)?)
 }
 
 #[tracing::instrument(level = "trace", skip(file))]
