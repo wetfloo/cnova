@@ -1,5 +1,6 @@
 use crate::{
     cli::{Cli, FileMatchStrictness, LrcAcquireBehavior},
+    ext::OptionExt as _,
     remote::LyricsRequest,
     util::TraceLog,
 };
@@ -31,9 +32,9 @@ pub enum PackError {
     #[error(transparent)]
     Io(io::Error),
     #[error(
-        "failed to prepare a request. artist is {:?}, title is {:?}",
-        artist,
-        title
+        "failed to prepare a request. artist is {}, title is {}",
+        artist.trace(),
+        title.trace(),
     )]
     RequestPrepare {
         artist: Option<String>,
@@ -228,7 +229,12 @@ fn prepare_lyrics_request(file: TaggedFile) -> Result<LyricsRequest, PackError> 
     let duration = None; // TODO
 
     if title.is_none() || artist.is_none() || album.is_none() {
-        tracing::warn!(?artist, ?title, ?album, "common tag couldn't be read");
+        tracing::warn!(
+            artist = %artist.trace(),
+            title = %title.trace(),
+            album = %album.trace(),
+            "common tag couldn't be read",
+        );
     }
     // TODO
     //if duration.is_none() {
