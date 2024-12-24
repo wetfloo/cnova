@@ -2,7 +2,6 @@ use crate::{
     cli::{Cli, FileMatchStrictness, LrcAcquireBehavior},
     remote::LyricsRequest,
     trace::TraceExt as _,
-    util::TraceLog,
 };
 use ignore::WalkState;
 use lofty::{
@@ -25,11 +24,12 @@ impl Default for FileMatchStrictness {
 pub enum PackError {
     #[error("underlying tagging error")]
     Lofty {
+        // TODO: remove
         path: PathBuf,
         #[source]
         src: LoftyError,
     },
-    #[error("io error {0:?}")]
+    #[error("io error {0}")]
     Io(#[source] io::Error),
     #[error(
         "failed to prepare a request. artist is {}, title is {}",
@@ -40,15 +40,9 @@ pub enum PackError {
         artist: Option<String>,
         title: Option<String>,
     },
-    #[error(transparent)]
+    #[error("ignore error {0}")]
     Ignore(ignore::Error),
     // TODO (errors): add file match error
-}
-
-impl TraceLog for PackError {
-    fn trace_log(&self) {
-        tracing::warn!(?self);
-    }
 }
 
 pub type PackResult = Result<(LyricsRequest, ignore::DirEntry), PackError>;

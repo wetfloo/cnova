@@ -7,13 +7,11 @@ use std::{future::Future, io, path::PathBuf, sync::Arc};
 use tokio::task::JoinSet;
 use trace::TraceExt as _;
 use tracing::level_filters::LevelFilter;
-use util::{TraceErr as _, TraceLog as _};
 
 mod cli;
 mod file;
 mod remote;
 mod trace;
-mod util;
 
 #[tokio::main]
 #[tracing::instrument(level = "trace")]
@@ -69,7 +67,7 @@ async fn handle_all(
     let mut join_set = JoinSet::new();
 
     while let Some(res) = rx.recv().await {
-        if let Ok((request, dir_entry)) = res.trace_err() {
+        if let Ok((request, dir_entry)) = res.inspect_err(|e| tracing::warn!(%e)) {
             tracing::trace!(?request, ?dir_entry, "received new value");
 
             let remote = remote.clone();
@@ -151,7 +149,19 @@ async fn handle_entry<P>(
         }
 
         Err(e) => {
-            e.trace_log();
+            match e {
+                LyricsError::InvalidRequest(_) => tracing::error!( %e),
+                LyricsError::Misc(e) => tracing::warn!(%e),
+                LyricsError::InvalidStatusCode { status, url } => {
+                    if status == StatusCode::NOT_FOUND {
+                        // TODO (caching): save this info somewhere and don't try to attempt to get
+                        // the song lyrics
+                        tracing::info!(%url, "lyrics not found");
+                    } else {
+                        tracing::warn!(%e);
+                    }
+                }
+            }
         }
     }
 }

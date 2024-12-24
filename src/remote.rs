@@ -1,9 +1,7 @@
 use core::fmt;
-use reqwest::{Proxy, StatusCode};
+use reqwest::Proxy;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-
-use crate::util::TraceLog;
 
 mod url {
     use const_format::concatcp;
@@ -72,27 +70,6 @@ pub enum LyricsError {
         status: reqwest::StatusCode,
         url: &'static str,
     },
-}
-
-impl TraceLog for LyricsError {
-    fn trace_log(&self) {
-        match self {
-            Self::InvalidRequest(e) => tracing::error!(
-                ?e,
-                "built an invalid request, this is bad, please report this to the developer"
-            ),
-            Self::Misc(e) => tracing::warn!(?e, "misc request error"),
-            Self::InvalidStatusCode { status, url } => {
-                if *status == StatusCode::NOT_FOUND {
-                    // TODO (caching): save this info somewhere and don't try to attempt to get
-                    // the song lyrics
-                    tracing::info!(%url, "lyrics not found");
-                } else {
-                    tracing::warn!(%url, "received http error");
-                }
-            }
-        }
-    }
 }
 
 pub struct Remote {
