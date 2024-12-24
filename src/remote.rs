@@ -86,9 +86,9 @@ impl TraceLog for LyricsError {
                 if *status == StatusCode::NOT_FOUND {
                     // TODO (caching): save this info somewhere and don't try to attempt to get
                     // the song lyrics
-                    tracing::info!(?url, "lyrics not found");
+                    tracing::info!(%url, "lyrics not found");
                 } else {
-                    tracing::warn!(?url, "received http error");
+                    tracing::warn!(%url, "received http error");
                 }
             }
         }
