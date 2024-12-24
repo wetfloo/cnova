@@ -9,7 +9,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            Ok(v) => v.fmt(f),
+            Ok(v) => write!(f, "\"{}\"", v),
             Err(e) => write!(f, "Err({})", e),
         }
     }

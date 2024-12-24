@@ -14,7 +14,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            Some(v) => v.fmt(f),
+            Some(v) => write!(f, "\"{}\"", v),
             None => f.write_str("None"),
         }
     }
