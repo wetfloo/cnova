@@ -185,7 +185,7 @@ where
 
 #[tracing::instrument(level = "trace")]
 async fn crate_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> {
-    // ...this is handled by the caller, like wtf?
+    // TODO (tracing) ...this is handled by the caller, like wtf?
     path.set_extension("nolrc");
     tokio::fs::OpenOptions::new()
         .create(true)
