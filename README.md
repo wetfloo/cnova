@@ -40,6 +40,7 @@ unless specified.
 
 TODOS
 -----
+- [ ] Progress bars, ETAs
 - [ ] Caching for lyrics (to not re-download them every time, and to potentially avoid filling the filesystem with a bunch of empty .nolrc files)
 - [ ] Better tracing in general (levels that make more sense, more informational and, at the same time, less noisy error messages)
 - [ ] Testing, somehow. Nicely separated functions instead of this mess
