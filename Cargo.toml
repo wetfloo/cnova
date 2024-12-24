@@ -8,7 +8,7 @@ license = "MIT"
 homepage = "https://github.com/wetfloo/cnova"
 repository = "https://github.com/wetfloo/cnova"
 readme = "README.md"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 
 [profile.release]
