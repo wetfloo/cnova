@@ -22,13 +22,21 @@ where
     }
 }
 
-impl<'a, T, E> From<&'a Result<T, E>> for ResultTrace<'a, T, E> {
+impl<'a, T, E> From<&'a Result<T, E>> for ResultTrace<'a, T, E>
+where
+    T: fmt::Display,
+    E: fmt::Display,
+{
     fn from(value: &'a Result<T, E>) -> Self {
         Self(value)
     }
 }
 
-impl<T, E> ResultExt for Result<T, E> {
+impl<T, E> ResultExt for Result<T, E>
+where
+    T: fmt::Display,
+    E: fmt::Display,
+{
     type T = T;
     type E = E;
 

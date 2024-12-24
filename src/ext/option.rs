@@ -20,13 +20,19 @@ where
     }
 }
 
-impl<'a, T> From<&'a Option<T>> for OptionTrace<'a, T> {
+impl<'a, T> From<&'a Option<T>> for OptionTrace<'a, T>
+where
+    T: fmt::Display,
+{
     fn from(value: &'a Option<T>) -> Self {
         Self(value)
     }
 }
 
-impl<T> OptionExt for Option<T> {
+impl<T> OptionExt for Option<T>
+where
+    T: fmt::Display,
+{
     type T = T;
 
     fn trace(&self) -> OptionTrace<'_, Self::T> {
