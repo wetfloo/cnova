@@ -33,3 +33,19 @@ impl<T> OptionExt for Option<T> {
         self.into()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_some_trace() {
+        assert_eq!("\"69\"", Some(69).trace().to_string());
+    }
+
+    #[test]
+    fn test_none_trace() {
+        let opt: Option<i32> = None;
+        assert_eq!("None", opt.trace().to_string());
+    }
+}

@@ -36,3 +36,20 @@ impl<T, E> ResultExt for Result<T, E> {
         self.into()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_ok_trace() {
+        let res: Result<_, i32> = Ok(69);
+        assert_eq!("\"69\"", res.trace().to_string());
+    }
+
+    #[test]
+    fn test_err_trace() {
+        let res: Result<i32, _> = Err(42);
+        assert_eq!("Err(42)", res.trace().to_string());
+    }
+}
