@@ -3,9 +3,9 @@ use std::fmt;
 pub struct OptionTrace<'a, T>(&'a Option<T>);
 
 pub trait OptionExt {
-    type Value;
+    type T;
 
-    fn trace(&self) -> OptionTrace<Self::Value>;
+    fn trace(&self) -> OptionTrace<Self::T>;
 }
 
 impl<T> fmt::Display for OptionTrace<'_, T>
@@ -27,9 +27,9 @@ impl<'a, T> From<&'a Option<T>> for OptionTrace<'a, T> {
 }
 
 impl<T> OptionExt for Option<T> {
-    type Value = T;
+    type T = T;
 
-    fn trace(&self) -> OptionTrace<'_, Self::Value> {
+    fn trace(&self) -> OptionTrace<'_, Self::T> {
         self.into()
     }
 }
