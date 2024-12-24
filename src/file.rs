@@ -143,12 +143,12 @@ fn from_entry(
         }
 
         FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
-            tracing::debug!(?ext_matches, "probing by extension");
+            tracing::debug!(%ext_matches, "probing by extension");
             shallow_inspect(path)?
         }
 
         FileMatchStrictness::Paranoid => {
-            tracing::debug!(?ext_matches, "deep probing");
+            tracing::debug!(%ext_matches, "deep probing");
             deep_inspect(path)?
         }
     };
