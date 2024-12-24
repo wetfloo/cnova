@@ -1,12 +1,12 @@
 use std::fmt;
 
-pub struct OptionTrace<'a, T>(&'a Option<T>);
-
 pub trait OptionExt {
     type T;
 
     fn trace(&self) -> OptionTrace<Self::T>;
 }
+
+pub struct OptionTrace<'a, T>(&'a Option<T>);
 
 impl<T> fmt::Display for OptionTrace<'_, T>
 where

@@ -63,9 +63,9 @@ impl fmt::Display for LyricsResponse {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LyricsError {
-    #[error("invalid Reqwest request, THIS ONE IS BAD")]
+    #[error("invalid Reqwest request, THIS ONE IS BAD! {0:?}")]
     InvalidRequest(#[source] reqwest::Error),
-    #[error("reqwest error: {0}")]
+    #[error("request error: {0}")]
     Misc(#[from] reqwest::Error),
     #[error("invalid status code {status} from url {url}")]
     InvalidStatusCode {

@@ -29,8 +29,8 @@ pub enum PackError {
         #[source]
         src: LoftyError,
     },
-    #[error(transparent)]
-    Io(io::Error),
+    #[error("io error {0:?}")]
+    Io(#[source] io::Error),
     #[error(
         "failed to prepare a request. artist is {}, title is {}",
         artist.trace(),

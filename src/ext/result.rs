@@ -1,13 +1,13 @@
 use std::fmt;
 
-pub struct ResultTrace<'a, T, E>(&'a Result<T, E>);
-
 pub trait ResultExt {
     type T;
     type E;
 
     fn trace(&self) -> ResultTrace<Self::T, Self::E>;
 }
+
+pub struct ResultTrace<'a, T, E>(&'a Result<T, E>);
 
 impl<T, E> fmt::Display for ResultTrace<'_, T, E>
 where
