@@ -202,3 +202,103 @@ async fn create_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> 
         .open(&path)
         .await
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tempfile::NamedTempFile;
+    use tokio::fs::try_exists;
+
+    const CREATE_TEMP_FILE_EXPECT_MSG: &str = "failed to create temp file";
+
+    #[tokio::test]
+    async fn test_create_nolrc() {
+        let file = NamedTempFile::new().expect(CREATE_TEMP_FILE_EXPECT_MSG);
+        let mut path = file.path().to_owned();
+        let mut path_clone = path.with_extension("flac");
+
+        let res = create_nolrc(&mut path_clone).await;
+        assert!(res.is_ok(), "{:?}", path_clone);
+
+        let og_path_exists = try_exists(&path).await;
+        assert!(
+            matches!(og_path_exists, Ok(true)),
+            "{:?}, {:?}",
+            og_path_exists,
+            path
+        );
+
+        path.set_extension("nolrc");
+        assert_eq!(path, path_clone);
+
+        let nolrc_exists = try_exists(&path).await;
+        assert!(matches!(nolrc_exists, Ok(true)), "{:?}", path);
+    }
+
+    #[tokio::test]
+    async fn test_replace_nolrc_halfway() {
+        let lyrics = "some lyrics go here, right?";
+        let file = NamedTempFile::new().expect(CREATE_TEMP_FILE_EXPECT_MSG);
+        let mut path = file.path().to_owned();
+        let mut path_clone = path.with_extension("flac");
+
+        let res = replace_nolrc(&mut path_clone, lyrics).await;
+        assert!(
+            matches!(res, Err(ReplaceNolrcError::Delete(_))),
+            "{:?}",
+            path_clone
+        );
+
+        let og_path_exists = try_exists(&path).await;
+        assert!(
+            matches!(og_path_exists, Ok(true)),
+            "{:?}, {:?}",
+            og_path_exists,
+            path
+        );
+
+        path.set_extension("lrc");
+        let lrc_exists = try_exists(&path).await;
+        assert!(matches!(lrc_exists, Ok(true)), "{:?}", path);
+        let lrc_content = tokio::fs::read_to_string(&path).await;
+        assert!(lrc_content.is_ok());
+        assert_eq!(lyrics, lrc_content.unwrap());
+
+        path.set_extension("nolrc");
+        let nolrc_exists = try_exists(&path).await;
+        assert!(matches!(nolrc_exists, Ok(false)), "{:?}", path);
+    }
+
+    #[tokio::test]
+    async fn test_replace_nolrc_fully() {
+        let lyrics = "some lyrics go here, right?";
+        let file = NamedTempFile::new().expect(CREATE_TEMP_FILE_EXPECT_MSG);
+        let mut path = file.path().to_owned();
+        let mut path_clone = path.with_extension("flac");
+
+        let res = create_nolrc(&mut path_clone).await;
+        assert!(res.is_ok(), "{:?}", path_clone);
+
+        let res = replace_nolrc(&mut path_clone, lyrics).await;
+        assert!(res.is_ok(), "{:?}", path_clone);
+
+        let og_path_exists = try_exists(&path).await;
+        assert!(
+            matches!(og_path_exists, Ok(true)),
+            "{:?}, {:?}",
+            og_path_exists,
+            path
+        );
+
+        path.set_extension("lrc");
+        let lrc_exists = try_exists(&path).await;
+        assert!(matches!(lrc_exists, Ok(true)), "{:?}", path);
+        let lrc_content = tokio::fs::read_to_string(&path).await;
+        assert!(lrc_content.is_ok());
+        assert_eq!(lyrics, lrc_content.unwrap());
+
+        path.set_extension("nolrc");
+        let nolrc_exists = try_exists(&path).await;
+        assert!(matches!(nolrc_exists, Ok(false)), "{:?}", path);
+    }
+}
