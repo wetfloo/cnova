@@ -1,18 +1,18 @@
 use clap::Parser as _;
 use cli::Cli;
-use ext::ResultExt as _;
 use file::{PackResult, PacksRx};
 use remote::{LyricsError, LyricsRequest, LyricsResponse, Remote};
 use reqwest::StatusCode;
 use std::{future::Future, io, path::PathBuf, sync::Arc};
 use tokio::task::JoinSet;
+use trace::TraceExt as _;
 use tracing::level_filters::LevelFilter;
 use util::{TraceErr as _, TraceLog as _};
 
 mod cli;
-mod ext;
 mod file;
 mod remote;
+mod trace;
 mod util;
 
 #[tokio::main]

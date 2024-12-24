@@ -1,7 +1,7 @@
 use crate::{
     cli::{Cli, FileMatchStrictness, LrcAcquireBehavior},
-    ext::OptionExt as _,
     remote::LyricsRequest,
+    trace::TraceExt as _,
     util::TraceLog,
 };
 use ignore::WalkState;
