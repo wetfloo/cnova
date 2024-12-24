@@ -24,8 +24,7 @@ pub struct LyricsRequest {
     pub duration: Option<Duration>,
 }
 
-/// Represents a response containing all the available info about the track, deserialized.
-/// `duration` is parsed from seconds
+/// Represents a response containing all the available info about the track, deserialized
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LyricsResponse {
