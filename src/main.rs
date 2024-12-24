@@ -107,18 +107,23 @@ async fn handle_entry<P>(
                 instrumental: Some(false) | None,
                 ..
             },
-        ) => match replace_nolrc(&mut path.to_owned(), &lyrics).await {
-            Ok(()) => (),
-            Err(ReplaceNolrcError::Delete(e)) if e.kind() == io::ErrorKind::NotFound => {
-                tracing::debug!(path = %path.display(), "nolrc file not found")
+        ) => {
+            let mut path_owned = path.to_owned();
+            match replace_nolrc(&mut path_owned, &lyrics).await {
+                Ok(()) => {
+                    tracing::info!(path = %path.display(), "successfully replaced nolrc with lrc file");
+                }
+                Err(ReplaceNolrcError::Delete(e)) if e.kind() == io::ErrorKind::NotFound => {
+                    tracing::debug!(path = %path_owned.display(), "nolrc file not found");
+                }
+                Err(ReplaceNolrcError::Write(e)) => {
+                    tracing::warn!(%e, path = %path_owned.display(),"failed to write to lyrics file");
+                }
+                Err(ReplaceNolrcError::Delete(e)) => {
+                    tracing::warn!(%e, path = %path_owned.display(), "failed to delete existing nolrc file");
+                }
             }
-            Err(ReplaceNolrcError::Write(e)) => {
-                tracing::warn!(path = %path.display(), ?e, "failed to write to lyrics file")
-            }
-            Err(ReplaceNolrcError::Delete(e)) => {
-                tracing::warn!(path = %path.display(), ?e, "failed to delete existing nolrc file")
-            }
-        },
+        }
 
         // TODO: separate instrumental and tracks with no lyrics available (at this moment)
         Err(LyricsError::InvalidStatusCode {
@@ -131,22 +136,20 @@ async fn handle_entry<P>(
                 // the song lyrics
                 tracing::info!(path = %path.display(), "no lyrics found");
 
-                match create_nolrc(&mut path.to_owned())
-                    .await
-                    .map_err(|e| e.kind())
-                {
+                let mut path_owned = path.to_owned();
+                match create_nolrc(&mut path_owned).await.map_err(|e| e.kind()) {
                     Ok(_file) => {
-                        tracing::info!(path = %path.display(), "successfully created nolrc file")
+                        tracing::info!(path = %path.display(), "successfully created nolrc file");
                     }
                     Err(io::ErrorKind::AlreadyExists) => {
-                        tracing::debug!(path = %path.display(), "skipping creation of nolrc file, since it exists")
+                        tracing::debug!(path = %path_owned.display(), "skipping creation of nolrc file, since it exists");
                     }
                     Err(kind) => {
-                        tracing::warn!(path = %path.display(), ?kind, "failed to create nolrc file")
+                        tracing::warn!(path = %path_owned.display(), ?kind, "failed to create nolrc file");
                     }
                 }
             } else {
-                tracing::debug!(path = %path.display(), "not writing nolrc file")
+                tracing::debug!(path = %path.display(), "not writing nolrc file");
             }
         }
 
@@ -157,7 +160,7 @@ async fn handle_entry<P>(
                     e
                 )
             }
-            LyricsError::Misc(e) => tracing::warn!(%e),
+            LyricsError::Misc(inner) => tracing::warn!(%inner),
             LyricsError::InvalidStatusCode { .. } => tracing::warn!(%e),
         },
     }
@@ -165,9 +168,9 @@ async fn handle_entry<P>(
 
 #[derive(Debug, thiserror::Error)]
 enum ReplaceNolrcError {
-    #[error("failed to write to lrc file")]
+    #[error("failed to write to lrc file due to error: {0}")]
     Write(#[source] io::Error),
-    #[error("failed to delete nolrc file")]
+    #[error("failed to delete nolrc file due to error: {0}")]
     Delete(#[source] io::Error),
 }
 
@@ -176,25 +179,21 @@ async fn replace_nolrc<C>(path: &mut PathBuf, lyrics: C) -> Result<(), ReplaceNo
 where
     C: AsRef<[u8]>,
 {
-    // TODO (tracing): This tracing is handled here, but...
     path.set_extension("lrc");
     tokio::fs::write(&path, &lyrics)
         .await
         .map_err(ReplaceNolrcError::Write)?;
-    tracing::info!(path = %path.display(), "successfully wrote lyrics file");
 
     path.set_extension("nolrc");
     tokio::fs::remove_file(&path)
         .await
         .map_err(ReplaceNolrcError::Delete)?;
-    tracing::info!(path = %path.display(), "successfully removed nolrc file");
 
     Ok(())
 }
 
 #[tracing::instrument(level = "trace")]
 async fn create_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> {
-    // TODO (tracing) ...this is handled by the caller, like wtf?
     path.set_extension("nolrc");
     tokio::fs::OpenOptions::new()
         .create(true)
