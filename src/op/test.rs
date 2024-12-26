@@ -9,6 +9,8 @@ use tokio::fs::try_exists;
 use std::iter;
 use std::sync::Mutex;
 
+const CREATE_TEMP_FILE_EXPECT_MSG: &str = "failed to create temp file";
+
 struct TestRemoteImpl<I> {
     /// [`Mutex`] makes this type [`Send`] + [`Sync`]
     inner: Mutex<TestRemoteImplInner<I>>,
@@ -111,8 +113,6 @@ async fn test_empty_dirs() {
 
     assert_eq!(0, remote.call_count());
 }
-
-const CREATE_TEMP_FILE_EXPECT_MSG: &str = "failed to create temp file";
 
 #[tokio::test]
 async fn test_create_nolrc() {
