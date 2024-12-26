@@ -7,7 +7,7 @@ use tokio::task::JoinSet;
 pub mod cli;
 pub mod file;
 pub mod remote;
-pub mod trace;
+mod trace;
 
 /// Handles all the given packs of data from `rx`. Will not create `.nolrc` files
 /// if `deny_nolrc` is `true`. Doesn't spawn any more jobs requesting lyrics from
