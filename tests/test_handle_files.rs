@@ -1,12 +1,12 @@
 use cnova::cli::Cli;
-use cnova::file::{self, PacksTx, PacksRx};
-use cnova::handle_all;
+use cnova::file::{self, PacksRx, PacksTx};
 use cnova::remote::{self, LyricsError, LyricsRequest, LyricsResponse, Remote};
+use cnova::wrapper;
 use std::time::Duration;
 
 use std::iter;
 use std::marker::PhantomData;
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
 struct TestRemoteImpl<I> {
     /// [`Mutex`] makes this type [`Send`] + [`Sync`]

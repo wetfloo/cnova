@@ -1,5 +1,4 @@
 use clap::Parser as _;
-use file::PackResult;
 use std::sync::Arc;
 use tracing::level_filters::LevelFilter;
 
@@ -26,24 +25,9 @@ async fn main() {
 
     let mut cli = Cli::parse();
 
-    // async preparations
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PackResult>();
-    let remote = Arc::new(RemoteImpl::new(cli.proxy.take()) // not gonna need proxy anywhere else
+    let remote = RemoteImpl::new(cli.proxy.take()) // not gonna need proxy anywhere else
         .expect("couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?",
-    ));
-    // To not overload the site with insane number of requests
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(cli.download_jobs.into()));
+        );
 
-    let handle = tokio::spawn(async move {
-        cnova::handle_all(remote, semaphore, &mut rx, cli.deny_nolrc).await;
-    });
-
-    tokio::task::spawn_blocking(move || {
-        file::prepare_entries(&tx, &cli)
-            .expect("the amount of paths provided has to be verified at the cli level");
-    })
-    .await
-    .expect(JOIN_HANDLE_EXPECT_MSG);
-
-    handle.await.expect(JOIN_HANDLE_EXPECT_MSG);
+    cnova::wrapper(remote, cli).await;
 }
