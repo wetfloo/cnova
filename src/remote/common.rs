@@ -18,6 +18,7 @@ pub struct LyricsRequest {
 
 /// Represents a response containing all the available info about the track, deserialized
 #[derive(Debug, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(Clone))]
 #[serde(rename_all = "camelCase")]
 pub struct LyricsResponse {
     pub id: Option<u64>,
