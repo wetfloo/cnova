@@ -115,6 +115,19 @@ async fn test_empty_dirs() {
 }
 
 #[tokio::test]
+async fn test_bad_files() {
+    let dir = tempdir_in(env::temp_dir()).unwrap();
+    let _file1 = NamedTempFile::with_suffix_in(".flac", dir.path()).unwrap();
+    let _file2 = NamedTempFile::with_suffix_in(".mp3", dir.path()).unwrap();
+
+    let remote = Box::leak(Box::new(TestRemoteImpl::with(typical_ok)));
+    let cli = typical_cli(iter::once(dir.into_path()));
+    super::start_up(remote, cli).await;
+
+    assert_eq!(0, remote.call_count());
+}
+
+#[tokio::test]
 async fn test_create_nolrc() {
     let file = NamedTempFile::new().expect(CREATE_TEMP_FILE_EXPECT_MSG);
     let mut path = file.path().to_owned();
