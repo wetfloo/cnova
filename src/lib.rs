@@ -21,9 +21,9 @@ const JOIN_HANDLE_EXPECT_MSG: &str =
 /// To understand, why `remote` has to have all these type constraints,
 /// consult [`tokio::runtime::Runtime::spawn`]
 /// and [`tokio::task::JoinSet::spawn`] documentation
-pub async fn start_up<R>(remote: Arc<R>, cli: Cli)
+pub async fn start_up<R>(remote: &'static R, cli: Cli)
 where
-    R: Remote + Send + Sync + 'static,
+    R: Remote + Sync,
 {
     let deny_nolrc = cli.deny_nolrc;
 
@@ -48,12 +48,12 @@ where
 /// `remote` than `semaphore` has permits at one time
 #[tracing::instrument(level = "trace", skip_all)]
 async fn handle_all<R>(
-    remote: Arc<R>,
+    remote: &'static R,
     semaphore: Arc<tokio::sync::Semaphore>,
     rx: &mut PacksRx,
     deny_nolrc: bool,
 ) where
-    R: Remote + Send + Sync + 'static,
+    R: Remote + Sync,
 {
     let mut join_set = JoinSet::new();
 
@@ -61,7 +61,6 @@ async fn handle_all<R>(
         if let Ok((request, dir_entry)) = res.inspect_err(|e| tracing::warn!(%e)) {
             tracing::trace!(?request, ?dir_entry, "received new value");
 
-            let remote = remote.clone();
             let permit = semaphore.clone().acquire_owned();
 
             join_set.spawn(handle_entry(permit, remote, request, dir_entry, deny_nolrc));
@@ -74,7 +73,7 @@ async fn handle_all<R>(
 #[tracing::instrument(level = "trace", skip_all)]
 async fn handle_entry<P, R>(
     permit: P,
-    remote: Arc<R>,
+    remote: &'static R,
     request: LyricsRequest,
     dir_entry: ignore::DirEntry,
     deny_nolrc: bool,

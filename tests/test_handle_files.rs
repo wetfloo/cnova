@@ -5,7 +5,7 @@ use std::time::Duration;
 use tempfile::{env, tempdir_in};
 
 use std::iter;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 struct TestRemoteImpl<I> {
     /// [`Mutex`] makes this type [`Send`] + [`Sync`]
@@ -103,9 +103,9 @@ async fn test_empty_dirs() {
     // 0 files
     let dir = tempdir_in(env::temp_dir()).unwrap();
 
-    let remote = Arc::new(TestRemoteImpl::with(typical_ok));
+    let remote = Box::leak(Box::new(TestRemoteImpl::with(typical_ok)));
     let cli = typical_cli(iter::once(dir.into_path()));
-    cnova::start_up(remote.clone(), cli).await;
+    cnova::start_up(remote, cli).await;
 
     assert_eq!(0, remote.call_count());
 }
