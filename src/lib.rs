@@ -42,6 +42,13 @@ pub async fn work() {
     handle.await.expect(JOIN_HANDLE_EXPECT_MSG);
 }
 
+/// Handles all the given packs of data from `rx`. Will not create `.nolrc` files
+/// if `deny_nolrc` is `true`. Doesn't spawn any more jobs requesting lyrics from
+/// `remote` than `semaphore` has permits at one time
+///
+/// To understand, why remote has to have all these type constraints,
+/// consult [`tokio::runtime::Runtime::spawn`]
+/// and [`tokio::task::JoinSet::spawn`] documentation
 #[tracing::instrument(level = "trace", skip_all)]
 async fn handle_all<R>(
     remote: Arc<R>,
@@ -49,8 +56,6 @@ async fn handle_all<R>(
     rx: &mut PacksRx,
     deny_nolrc: bool,
 )
-// To understand, remote has to have all these type constraints,
-// see tokio::runtime::Runtime::spawn and tokio::task::JoinSet::spawn documentation
 where
     R: Remote + Send + Sync + 'static,
 {
