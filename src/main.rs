@@ -1,4 +1,5 @@
 use clap::Parser as _;
+use std::sync::Arc;
 use tracing::level_filters::LevelFilter;
 
 use cnova::{self, cli::Cli, remote::RemoteImpl};
@@ -22,9 +23,10 @@ async fn main() {
 
     let mut cli = Cli::parse();
 
-    let remote = RemoteImpl::new(cli.proxy.take()) // not gonna need proxy anywhere else
-        .expect("couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?",
-        );
+    let remote = Arc::new(RemoteImpl::new(cli.proxy.take()) // not gonna need proxy anywhere else
+        .expect(
+            "couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?"
+        ));
 
     cnova::start_up(remote, cli).await;
 }

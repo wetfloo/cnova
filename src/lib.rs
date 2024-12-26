@@ -21,14 +21,13 @@ const JOIN_HANDLE_EXPECT_MSG: &str =
 /// To understand, why `remote` has to have all these type constraints,
 /// consult [`tokio::runtime::Runtime::spawn`]
 /// and [`tokio::task::JoinSet::spawn`] documentation
-pub async fn start_up<R>(remote: R, cli: Cli)
+pub async fn start_up<R>(remote: Arc<R>, cli: Cli)
 where
     R: Remote + Send + Sync + 'static,
 {
     let deny_nolrc = cli.deny_nolrc;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PackResult>();
-    let remote = Arc::new(remote);
     let semaphore = Arc::new(tokio::sync::Semaphore::new(cli.download_jobs.into()));
     let handle = tokio::spawn(async move {
         handle_all(remote, semaphore, &mut rx, deny_nolrc).await;
