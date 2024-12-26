@@ -66,9 +66,8 @@ pub enum LyricsError {
     },
 }
 
+pub type Result = std::result::Result<LyricsResponse, LyricsError>;
+
 pub trait Remote {
-    fn get_lyrics(
-        &self,
-        req: &LyricsRequest,
-    ) -> impl Future<Output = Result<LyricsResponse, LyricsError>> + Send;
+    fn get_lyrics(&self, req: &LyricsRequest) -> impl Future<Output = Result> + Send;
 }

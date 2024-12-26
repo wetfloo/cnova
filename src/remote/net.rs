@@ -1,4 +1,4 @@
-use super::{LyricsError, LyricsRequest, LyricsResponse, Remote};
+use super::{LyricsError, LyricsRequest, Remote};
 use reqwest::Proxy;
 use std::time::Duration;
 
@@ -28,7 +28,7 @@ impl RemoteImpl {
 
 impl Remote for RemoteImpl {
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn get_lyrics(&self, req: &LyricsRequest) -> Result<LyricsResponse, LyricsError> {
+    async fn get_lyrics(&self, req: &LyricsRequest) -> super::Result {
         tracing::trace!("building request");
         let request = self
             .client

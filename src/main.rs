@@ -1,5 +1,3 @@
-use clap::Parser as _;
-use cli::Cli;
 use file::{PackResult, PacksRx};
 use remote::{LyricsError, LyricsRequest, LyricsResponse, Remote, RemoteImpl};
 use reqwest::StatusCode;
@@ -34,8 +32,20 @@ async fn main() {
     prepare().await;
 }
 
-#[tracing::instrument(level = "trace")]
+#[cfg(test)]
 async fn prepare() {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<PackResult>();
+    let remote = Arc::new(RemoteImpl::default());
+    let semaphore = Arc::new(tokio::sync::Semaphore::const_new(1));
+    todo!()
+}
+
+#[tracing::instrument(level = "trace")]
+#[cfg(not(test))]
+async fn prepare() {
+    use crate::cli::Cli;
+    use clap::Parser;
+
     let mut cli = Cli::parse();
 
     // async preparations
