@@ -1,6 +1,7 @@
 use core::fmt;
 use reqwest::Proxy;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::time::Duration;
 
 mod duration_secs;
@@ -74,11 +75,18 @@ pub enum LyricsError {
     },
 }
 
-pub struct Remote {
+pub trait Remote {
+    fn get_lyrics(
+        &self,
+        req: &LyricsRequest,
+    ) -> impl Future<Output = Result<LyricsResponse, LyricsError>> + Send;
+}
+
+pub struct RemoteImpl {
     client: reqwest::Client,
 }
 
-impl Remote {
+impl RemoteImpl {
     pub fn new(proxy: Option<Proxy>) -> Result<Self, reqwest::Error> {
         let mut builder = reqwest::ClientBuilder::new().timeout(Duration::from_secs(10));
         builder = if let Some(proxy) = proxy {
@@ -89,9 +97,11 @@ impl Remote {
 
         builder.build().map(|client| Self { client })
     }
+}
 
+impl Remote for RemoteImpl {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn get_lyrics(&self, req: &LyricsRequest) -> Result<LyricsResponse, LyricsError> {
+    async fn get_lyrics(&self, req: &LyricsRequest) -> Result<LyricsResponse, LyricsError> {
         tracing::trace!("building request");
         let request = self
             .client

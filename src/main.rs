@@ -1,7 +1,7 @@
 use clap::Parser as _;
 use cli::Cli;
 use file::{PackResult, PacksRx};
-use remote::{LyricsError, LyricsRequest, LyricsResponse, Remote};
+use remote::{LyricsError, LyricsRequest, LyricsResponse, Remote, RemoteImpl};
 use reqwest::StatusCode;
 use std::{future::Future, io, path::PathBuf, sync::Arc};
 use tokio::task::JoinSet;
@@ -36,7 +36,7 @@ async fn main() {
 
     // async preparations
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PackResult>();
-    let remote = Arc::new(Remote::new(cli.proxy.take()) // not gonna need proxy anywhere else
+    let remote = Arc::new(RemoteImpl::new(cli.proxy.take()) // not gonna need proxy anywhere else
         .expect("couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?",
     ));
     // To not overload the site with insane number of requests
@@ -57,12 +57,17 @@ async fn main() {
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-async fn handle_all(
-    remote: Arc<Remote>,
+async fn handle_all<R>(
+    remote: Arc<R>,
     semaphore: Arc<tokio::sync::Semaphore>,
     rx: &mut PacksRx,
     deny_nolrc: bool,
-) {
+)
+// To understand, remote has to have all these type constraints,
+// see tokio::runtime::Runtime::spawn and tokio::task::JoinSet::spawn documentation
+where
+    R: Remote + Send + Sync + 'static,
+{
     let mut join_set = JoinSet::new();
 
     while let Some(res) = rx.recv().await {
@@ -80,14 +85,15 @@ async fn handle_all(
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-async fn handle_entry<P>(
+async fn handle_entry<P, R>(
     permit: P,
-    remote: Arc<Remote>,
+    remote: Arc<R>,
     request: LyricsRequest,
     dir_entry: ignore::DirEntry,
     deny_nolrc: bool,
 ) where
     P: Future<Output = Result<tokio::sync::OwnedSemaphorePermit, tokio::sync::AcquireError>>,
+    R: Remote,
 {
     let permit = permit.await.expect("semaphore closed unexpectedly");
     let response = remote.get_lyrics(&request).await;
