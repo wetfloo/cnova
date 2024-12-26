@@ -1,7 +1,6 @@
 use cnova::cli::Cli;
 use cnova::file::{self, PacksRx, PacksTx};
 use cnova::remote::{self, LyricsError, LyricsRequest, LyricsResponse, Remote};
-use cnova::wrapper;
 use std::time::Duration;
 
 use std::iter;

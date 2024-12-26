@@ -29,5 +29,5 @@ async fn main() {
         .expect("couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?",
         );
 
-    cnova::wrapper(remote, cli).await;
+    cnova::start_up(remote, cli).await;
 }

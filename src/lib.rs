@@ -21,7 +21,7 @@ const JOIN_HANDLE_EXPECT_MSG: &str =
 /// To understand, why `remote` has to have all these type constraints,
 /// consult [`tokio::runtime::Runtime::spawn`]
 /// and [`tokio::task::JoinSet::spawn`] documentation
-pub async fn wrapper<R>(remote: R, cli: Cli)
+pub async fn start_up<R>(remote: R, cli: Cli)
 where
     R: Remote + Send + Sync + 'static,
 {
