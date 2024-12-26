@@ -17,5 +17,5 @@ async fn main() {
         tracing::subscriber::set_global_default(sub).expect(TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG);
     }
 
-    cnova::prepare().await;
+    cnova::work().await;
 }

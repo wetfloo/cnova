@@ -12,17 +12,9 @@ mod trace;
 const JOIN_HANDLE_EXPECT_MSG: &str =
     "seems like child job panicked. we shouldn't ever panic like that!";
 
-#[cfg(test)]
-pub async fn prepare(semaphore: usize) {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<PackResult>();
-    let remote = Arc::new(RemoteImpl::default());
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(semaphore));
-    todo!()
-}
-
 #[tracing::instrument(level = "trace")]
 #[cfg(not(test))]
-pub async fn prepare() {
+pub async fn work() {
     use crate::cli::Cli;
     use clap::Parser as _;
 
