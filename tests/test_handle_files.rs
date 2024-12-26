@@ -1,11 +1,10 @@
-use cnova::cli::Cli;
-use cnova::file::{self, PacksRx, PacksTx};
+use cnova::cli::{Cli, FileMatchStrictness, LrcAcquireBehavior};
 use cnova::remote::{self, LyricsError, LyricsRequest, LyricsResponse, Remote};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use std::iter;
-use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 struct TestRemoteImpl<I> {
     /// [`Mutex`] makes this type [`Send`] + [`Sync`]
@@ -64,7 +63,24 @@ fn typical_err() -> remote::Result {
     })
 }
 
+fn typical_cli<I>(paths: I) -> Cli
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    Cli {
+        paths: paths.into_iter().collect(),
+        no_ignore_hidden: false,
+        no_follow_symlinks: false,
+        lrc_acquire_behavior: LrcAcquireBehavior::LrcMissing,
+        deny_nolrc: false,
+        strictness: FileMatchStrictness::FilterByExt,
+        download_jobs: 1,
+        traversal_jobs: 1,
+        proxy: None,
+    }
+}
+
 #[tokio::test]
 async fn test_a() {
-    let remote = Arc::new(TestRemoteImpl::with(|| typical_ok()));
+    let remote = TestRemoteImpl::with(typical_ok);
 }

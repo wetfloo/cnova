@@ -1,8 +1,7 @@
 use clap::Parser as _;
-use std::sync::Arc;
 use tracing::level_filters::LevelFilter;
 
-use cnova::{self, cli::Cli, file, remote::RemoteImpl};
+use cnova::{self, cli::Cli, remote::RemoteImpl};
 
 const TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG: &str = "unable to set global tracing subscriber";
 const JOIN_HANDLE_EXPECT_MSG: &str =
