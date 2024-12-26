@@ -14,6 +14,13 @@ mod trace;
 const JOIN_HANDLE_EXPECT_MSG: &str =
     "seems like child job panicked. we shouldn't ever panic like that!";
 
+/// Starts up the whole process of going through tracks
+/// and creating corresponding `.lrc` and `.nolrc` files, taking `cli`
+/// configuration into account
+///
+/// To understand, why `remote` has to have all these type constraints,
+/// consult [`tokio::runtime::Runtime::spawn`]
+/// and [`tokio::task::JoinSet::spawn`] documentation
 pub async fn wrapper<R>(remote: R, cli: Cli)
 where
     R: Remote + Send + Sync + 'static,
@@ -40,10 +47,6 @@ where
 /// Handles all the given packs of data from `rx`. Will not create `.nolrc` files
 /// if `deny_nolrc` is `true`. Doesn't spawn any more jobs requesting lyrics from
 /// `remote` than `semaphore` has permits at one time
-///
-/// To understand, why remote has to have all these type constraints,
-/// consult [`tokio::runtime::Runtime::spawn`]
-/// and [`tokio::task::JoinSet::spawn`] documentation
 #[tracing::instrument(level = "trace", skip_all)]
 async fn handle_all<R>(
     remote: Arc<R>,
