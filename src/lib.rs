@@ -1,46 +1,13 @@
-use file::{PackResult, PacksRx};
-use remote::{LyricsError, LyricsRequest, LyricsResponse, Remote, RemoteImpl};
+use file::PacksRx;
+use remote::{LyricsError, LyricsRequest, LyricsResponse, Remote};
 use reqwest::StatusCode;
 use std::{future::Future, io, path::PathBuf, sync::Arc};
 use tokio::task::JoinSet;
 
-mod cli;
-mod file;
-mod remote;
-mod trace;
-
-const JOIN_HANDLE_EXPECT_MSG: &str =
-    "seems like child job panicked. we shouldn't ever panic like that!";
-
-#[tracing::instrument(level = "trace")]
-#[cfg(not(test))]
-pub async fn work() {
-    use crate::cli::Cli;
-    use clap::Parser as _;
-
-    let mut cli = Cli::parse();
-
-    // async preparations
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PackResult>();
-    let remote = Arc::new(RemoteImpl::new(cli.proxy.take()) // not gonna need proxy anywhere else
-        .expect("couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?",
-    ));
-    // To not overload the site with insane number of requests
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(cli.download_jobs.into()));
-
-    let handle = tokio::spawn(async move {
-        handle_all(remote, semaphore, &mut rx, cli.deny_nolrc).await;
-    });
-
-    tokio::task::spawn_blocking(move || {
-        file::prepare_entries(&tx, &cli)
-            .expect("the amount of paths provided has to be verified at the cli level");
-    })
-    .await
-    .expect(JOIN_HANDLE_EXPECT_MSG);
-
-    handle.await.expect(JOIN_HANDLE_EXPECT_MSG);
-}
+pub mod cli;
+pub mod file;
+pub mod remote;
+pub mod trace;
 
 /// Handles all the given packs of data from `rx`. Will not create `.nolrc` files
 /// if `deny_nolrc` is `true`. Doesn't spawn any more jobs requesting lyrics from
@@ -50,13 +17,12 @@ pub async fn work() {
 /// consult [`tokio::runtime::Runtime::spawn`]
 /// and [`tokio::task::JoinSet::spawn`] documentation
 #[tracing::instrument(level = "trace", skip_all)]
-async fn handle_all<R>(
+pub async fn handle_all<R>(
     remote: Arc<R>,
     semaphore: Arc<tokio::sync::Semaphore>,
     rx: &mut PacksRx,
     deny_nolrc: bool,
-)
-where
+) where
     R: Remote + Send + Sync + 'static,
 {
     let mut join_set = JoinSet::new();
