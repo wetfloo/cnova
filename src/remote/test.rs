@@ -4,8 +4,9 @@ use std::marker::PhantomData;
 use std::sync::Mutex;
 
 pub struct TestRemoteImpl<I, A> {
+    /// Makes this type Send + Sync
     iter: Mutex<I>,
-    // Nasty hack to avoid "conflicting implementations" error
+    /// Nasty hack to avoid "conflicting implementations" error
     _phantom: PhantomData<A>,
 }
 
@@ -53,7 +54,9 @@ impl<A> TestRemoteImpl<iter::Repeat<A>, A>
 where
     A: Clone,
 {
-    pub fn from_value(value: A) -> Self {
+    /// Get a new [`TestRemoteImpl`] from a single value.
+    /// This value will always be repeated when calling [`Remote::get_lyrics`]
+    pub fn new_from_value(value: A) -> Self {
         iter::repeat(value).into()
     }
 }
