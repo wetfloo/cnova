@@ -12,14 +12,13 @@ mod file;
 mod remote;
 mod trace;
 
+const JOIN_HANDLE_EXPECT_MSG: &str =
+    "seems like child job panicked. we shouldn't ever panic like that!";
+const TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG: &str = "unable to set global tracing subscriber";
+
 #[tokio::main]
 #[tracing::instrument(level = "trace")]
 async fn main() {
-    const JOIN_HANDLE_EXPECT_MSG: &str =
-        "seems like child job panicked. we shouldn't ever panic like that!";
-    // tracing
-    const TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG: &str = "unable to set global tracing subscriber";
-
     if cfg!(debug_assertions) {
         let sub = tracing_subscriber::fmt()
             .with_max_level(LevelFilter::DEBUG)
@@ -32,6 +31,11 @@ async fn main() {
         tracing::subscriber::set_global_default(sub).expect(TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG);
     }
 
+    prepare().await;
+}
+
+#[tracing::instrument(level = "trace")]
+async fn prepare() {
     let mut cli = Cli::parse();
 
     // async preparations
