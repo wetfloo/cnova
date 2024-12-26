@@ -41,7 +41,6 @@ pub enum PackError {
 }
 
 pub type PackResult = Result<(LyricsRequest, ignore::DirEntry), PackError>;
-// TODO: rename
 pub type PacksRx = tokio::sync::mpsc::UnboundedReceiver<PackResult>;
 pub type PacksTx = tokio::sync::mpsc::UnboundedSender<PackResult>;
 
