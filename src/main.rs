@@ -4,8 +4,6 @@ use tracing::level_filters::LevelFilter;
 use cnova::{self, cli::Cli, remote::RemoteImpl};
 
 const TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG: &str = "unable to set global tracing subscriber";
-const JOIN_HANDLE_EXPECT_MSG: &str =
-    "seems like child job panicked. we shouldn't ever panic like that!";
 
 #[tokio::main]
 #[tracing::instrument(level = "trace")]
