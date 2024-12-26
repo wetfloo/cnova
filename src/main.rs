@@ -1,4 +1,5 @@
 use clap::Parser as _;
+use cnova::op;
 use tracing::level_filters::LevelFilter;
 
 use cnova::{self, cli::Cli, remote::RemoteImpl};
@@ -27,5 +28,5 @@ async fn main() {
             "couldn't build remote. this means that we can't execute requests. are all the parameters verified at the cli level?"
         )));
 
-    cnova::start_up(remote, cli).await;
+    op::start_up(remote, cli).await;
 }

@@ -68,6 +68,12 @@ pub enum FileMatchStrictness {
     Paranoid,
 }
 
+impl Default for FileMatchStrictness {
+    fn default() -> Self {
+        Self::FilterByExt
+    }
+}
+
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum LrcAcquireBehavior {
     /// Attempt to download lyrics for every track, even if a corresponding .lrc or .nolrc is present

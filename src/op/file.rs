@@ -14,12 +14,6 @@ use lofty::{
 use std::{fmt::Debug, path::PathBuf};
 use std::{io, path::Path};
 
-impl Default for FileMatchStrictness {
-    fn default() -> Self {
-        Self::FilterByExt
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
     #[error(transparent)]
