@@ -72,7 +72,7 @@ async fn handle_all<R>(
 #[tracing::instrument(level = "trace", skip_all)]
 async fn handle_entry<P, R>(
     permit: P,
-    remote: &'static R,
+    remote: &R,
     request: LyricsRequest,
     dir_entry: ignore::DirEntry,
     deny_nolrc: bool,
