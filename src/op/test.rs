@@ -117,14 +117,28 @@ async fn test_empty_dirs() {
 #[tokio::test]
 async fn test_bad_files() {
     let dir = tempdir_in(env::temp_dir()).unwrap();
-    let _file1 = NamedTempFile::with_suffix_in(".flac", dir.path()).unwrap();
-    let _file2 = NamedTempFile::with_suffix_in(".mp3", dir.path()).unwrap();
+    let file1 = NamedTempFile::with_suffix_in(".flac", dir.path()).unwrap();
+    let file2 = NamedTempFile::with_suffix_in(".mp3", dir.path()).unwrap();
 
     let remote = Box::leak(Box::new(TestRemoteImpl::with(typical_ok)));
     let cli = typical_cli(iter::once(dir.into_path()));
     super::start_up(remote, cli).await;
 
     assert_eq!(0, remote.call_count());
+
+    let file1_exists = try_exists(file1.path()).await;
+    let file2_exists = try_exists(file2.path()).await;
+    let file1_lrc_exists = try_exists(file1.path().with_extension("lrc")).await;
+    let file2_lrc_exists = try_exists(file2.path().with_extension("lrc")).await;
+    let file1_nolrc_exists = try_exists(file1.path().with_extension("nolrc")).await;
+    let file2_nolrc_exists = try_exists(file2.path().with_extension("nolrc")).await;
+
+    assert!(matches!(file1_exists, Ok(true)));
+    assert!(matches!(file2_exists, Ok(true)));
+    assert!(matches!(file1_lrc_exists, Ok(false)));
+    assert!(matches!(file2_lrc_exists, Ok(false)));
+    assert!(matches!(file1_nolrc_exists, Ok(false)));
+    assert!(matches!(file2_nolrc_exists, Ok(false)));
 }
 
 #[tokio::test]
