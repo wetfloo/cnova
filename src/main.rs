@@ -1,4 +1,5 @@
 mod net;
+mod trace;
 
 use clap::Parser as _;
 use cnova::op;

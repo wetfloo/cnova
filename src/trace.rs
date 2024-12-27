@@ -1,5 +1,8 @@
 use core::fmt;
 
+/// Allows the implementor to present itself nicely in some user-facing scenario. This is almost
+/// like [`fmt::Display`], except that you don't need the type to be [`fmt::Display`], which is useful for
+/// types like [`Option`] and [`Result`]
 pub struct Trace<T>(T);
 
 impl<T, E> fmt::Display for Trace<&Result<T, E>>
@@ -27,7 +30,11 @@ where
     }
 }
 
+/// See [`Trace`] documentation
 pub trait TraceExt {
+    // Seems like the compiler can't see that this method is used for macros
+    // and generates warnings for it, so that's why it has to be allowed
+    #[allow(unused)]
     fn trace(&self) -> Trace<&Self>;
 }
 
