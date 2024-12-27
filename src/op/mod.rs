@@ -25,7 +25,7 @@ const JOIN_HANDLE_EXPECT_MSG: &str =
 /// To understand, why `remote` has to have all these type constraints,
 /// consult [`tokio::runtime::Runtime::spawn`]
 /// and [`tokio::task::JoinSet::spawn`] documentation
-#[tracing::instrument(level = "trace", skip(remote))]
+#[tracing::instrument(level = "trace", skip(remote), parent = None)]
 pub async fn start_up<R>(remote: &'static R, cli: Cli)
 where
     R: Remote + Sync,
