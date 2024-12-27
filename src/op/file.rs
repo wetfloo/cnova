@@ -21,7 +21,7 @@ pub enum PackError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(
-        "failed to prepare a request. artist is {}, title is {}",
+        "failed to prepare a request. artist is \"{}\", title is \"{}\"",
         artist.trace(),
         title.trace(),
     )]
@@ -83,7 +83,7 @@ pub fn prepare_entries(tx: &PacksTx, cli: &Cli) -> Result<(), NoPathsError> {
 #[tracing::instrument(level = "trace")]
 fn from_entry(path: &Path, cli: &Cli) -> Result<Option<(LyricsRequest, PathBuf)>, PackError> {
     if !path.is_file() {
-        tracing::debug!("entry is not a file");
+        tracing::debug!(path = %path.display(), "entry is not a file");
         return Ok(None);
     }
 
@@ -119,17 +119,17 @@ fn from_entry(path: &Path, cli: &Cli) -> Result<Option<(LyricsRequest, PathBuf)>
 
     let tagged_file = match cli.strictness {
         FileMatchStrictness::Paranoid | FileMatchStrictness::FilterByExt if !ext_matches => {
-            tracing::debug!("entry didn't match");
+            tracing::debug!(path = %path.display(), "entry didn't match");
             return Ok(None);
         }
 
         FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
-            tracing::debug!(%ext_matches, "probing by extension");
+            tracing::debug!(path = %path.display(), %ext_matches, "probing by extension");
             shallow_inspect(&path)?
         }
 
         FileMatchStrictness::Paranoid => {
-            tracing::debug!(%ext_matches, "deep probing");
+            tracing::debug!(path = %path.display(), %ext_matches, "deep probing");
             deep_inspect(&path)?
         }
     };

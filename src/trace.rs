@@ -10,7 +10,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
             Ok(v) => write!(f, "\"{}\"", v),
-            Err(e) => write!(f, "Err({})", e),
+            Err(e) => write!(f, "Err(\"{}\")", e),
         }
     }
 }
@@ -56,7 +56,7 @@ mod test {
     #[test]
     fn test_err_trace() {
         let res: Result<i32, _> = Err(42);
-        assert_eq!("Err(42)", res.trace().to_string());
+        assert_eq!("Err(\"42\")", res.trace().to_string());
     }
 
     #[test]

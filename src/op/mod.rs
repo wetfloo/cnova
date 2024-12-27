@@ -25,6 +25,7 @@ const JOIN_HANDLE_EXPECT_MSG: &str =
 /// To understand, why `remote` has to have all these type constraints,
 /// consult [`tokio::runtime::Runtime::spawn`]
 /// and [`tokio::task::JoinSet::spawn`] documentation
+#[tracing::instrument(level = "trace", skip(remote))]
 pub async fn start_up<R>(remote: &'static R, cli: Cli)
 where
     R: Remote + Sync,
@@ -164,9 +165,9 @@ async fn handle_entry<A, P, R>(
 
 #[derive(Debug, thiserror::Error)]
 enum ReplaceNolrcError {
-    #[error("failed to write to lrc file due to error: {0}")]
+    #[error("failed to write to lrc file due to error: \"{0}\"")]
     Write(#[source] io::Error),
-    #[error("failed to delete nolrc file due to error: {0}")]
+    #[error("failed to delete nolrc file due to error: \"{0}\"")]
     Delete(#[source] io::Error),
 }
 
