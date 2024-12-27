@@ -34,7 +34,7 @@ pub enum PackError {
     // TODO (errors): add file match error
 }
 
-pub type PackResult = Result<(LyricsRequest, ignore::DirEntry), PackError>;
+pub type PackResult = Result<(LyricsRequest, PathBuf), PackError>;
 pub type PacksRx = tokio::sync::mpsc::UnboundedReceiver<PackResult>;
 pub type PacksTx = tokio::sync::mpsc::UnboundedSender<PackResult>;
 
@@ -68,7 +68,7 @@ pub fn prepare_entries(tx: &PacksTx, cli: &Cli) -> Result<(), NoPathsError> {
         Box::new(move |entry| {
             if let Some(res) = entry
                 .map_err(|e| e.into())
-                .and_then(|entry| from_entry(entry, cli)).transpose() {
+                .and_then(|entry| from_entry(entry.path(), cli)).transpose() {
                     tracing::trace!(?res, "sending result over");
                     tx.send(res).expect("this channel is unbounded, and, therefore, should always be available to send to");
                 }
@@ -81,29 +81,28 @@ pub fn prepare_entries(tx: &PacksTx, cli: &Cli) -> Result<(), NoPathsError> {
 }
 
 #[tracing::instrument(level = "trace")]
-fn from_entry(
-    entry: ignore::DirEntry,
-    cli: &Cli,
-) -> Result<Option<(LyricsRequest, ignore::DirEntry)>, PackError> {
-    let path = entry.path();
-
+fn from_entry(path: &Path, cli: &Cli) -> Result<Option<(LyricsRequest, PathBuf)>, PackError> {
     if !path.is_file() {
         tracing::debug!("entry is not a file");
         return Ok(None);
     }
 
-    let mut path = path.to_owned();
+    let mut path_owned = path.to_owned();
     let filter_pass = match cli.lrc_acquire_behavior {
         LrcAcquireBehavior::All => true,
-        LrcAcquireBehavior::OverwriteExceptNolrc => !has_nolrc(&mut path),
-        LrcAcquireBehavior::LrcMissingAll => !has_lrc(&mut path),
-        LrcAcquireBehavior::LrcMissing => !has_lrc(&mut path) && !has_nolrc(&mut path),
+        LrcAcquireBehavior::OverwriteExceptNolrc => !has_nolrc(&mut path_owned),
+        LrcAcquireBehavior::LrcMissingAll => !has_lrc(&mut path_owned),
+        LrcAcquireBehavior::LrcMissing => !has_lrc(&mut path_owned) && !has_nolrc(&mut path_owned),
     };
     if !filter_pass {
         return Ok(None);
     }
 
-    let path = entry.path();
+    // Restore the original path after modifying its value
+    let os_string = path_owned.as_mut_os_string();
+    os_string.clear();
+    os_string.push(path.as_os_str());
+    let path = path_owned;
 
     let ext_matches = path
         .extension()
@@ -126,17 +125,17 @@ fn from_entry(
 
         FileMatchStrictness::FilterByExt | FileMatchStrictness::TrustyGuesser => {
             tracing::debug!(%ext_matches, "probing by extension");
-            shallow_inspect(path)?
+            shallow_inspect(&path)?
         }
 
         FileMatchStrictness::Paranoid => {
             tracing::debug!(%ext_matches, "deep probing");
-            deep_inspect(path)?
+            deep_inspect(&path)?
         }
     };
 
     tracing::trace!(path = %path.display(), "probing ok");
-    Ok(Some((prepare_lyrics_request(tagged_file)?, entry)))
+    Ok(Some((prepare_lyrics_request(tagged_file)?, path)))
 }
 
 #[tracing::instrument(level = "trace", skip(path))]

@@ -7,7 +7,12 @@ use crate::remote::{LyricsError, LyricsRequest, LyricsResponse, Remote};
 use file::PackResult;
 use file::PacksRx;
 use reqwest::StatusCode;
-use std::{future::Future, io, path::PathBuf, sync::Arc};
+use std::{
+    future::Future,
+    io,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::task::JoinSet;
 
 const JOIN_HANDLE_EXPECT_MSG: &str =
@@ -57,12 +62,12 @@ async fn handle_all<R>(
     let mut join_set = JoinSet::new();
 
     while let Some(res) = rx.recv().await {
-        if let Ok((request, dir_entry)) = res.inspect_err(|e| tracing::warn!(%e)) {
-            tracing::trace!(?request, ?dir_entry, "received new value");
+        if let Ok((request, path)) = res.inspect_err(|e| tracing::warn!(%e)) {
+            tracing::trace!(?request, ?path, "received new value");
 
             let permit = semaphore.clone().acquire_owned();
 
-            join_set.spawn(handle_entry(permit, remote, request, dir_entry, deny_nolrc));
+            join_set.spawn(handle_entry(permit, remote, request, path, deny_nolrc));
         }
     }
 
@@ -70,21 +75,21 @@ async fn handle_all<R>(
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-async fn handle_entry<P, R>(
+async fn handle_entry<A, P, R>(
     permit: P,
     remote: &R,
     request: LyricsRequest,
-    dir_entry: ignore::DirEntry,
+    path: A,
     deny_nolrc: bool,
 ) where
+    A: AsRef<Path>,
     P: Future<Output = Result<tokio::sync::OwnedSemaphorePermit, tokio::sync::AcquireError>>,
     R: Remote,
 {
+    let path = path.as_ref();
     let permit = permit.await.expect("semaphore closed unexpectedly");
     let response = remote.get_lyrics(&request).await;
     drop(permit); // manually drop, since we're done bombarding the website with requests
-
-    let path = dir_entry.path();
 
     match response {
         Ok(
