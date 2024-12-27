@@ -1,11 +1,13 @@
+mod cli;
 mod net;
+mod op;
+mod remote;
 mod trace;
 
 use clap::Parser as _;
-use cnova::op;
 use tracing::level_filters::LevelFilter;
 
-use cnova::{self, cli::Cli};
+use crate::cli::Cli;
 use net::RemoteImpl;
 
 const TRACING_SET_GLOBAL_DEFAULT_EXPECT_MSG: &str = "unable to set global tracing subscriber";

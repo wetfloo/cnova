@@ -1,4 +1,4 @@
-use cnova::remote::{self, LyricsError, LyricsRequest, Remote};
+use crate::remote::{self, LyricsError, LyricsRequest, Remote};
 use reqwest::Proxy;
 use std::time::Duration;
 
