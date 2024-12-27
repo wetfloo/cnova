@@ -193,7 +193,7 @@ where
 async fn create_nolrc(path: &mut PathBuf) -> Result<tokio::fs::File, io::Error> {
     path.set_extension("nolrc");
     tokio::fs::OpenOptions::new()
-        .create(true)
+        .create_new(true)
         .write(true)
         .truncate(false)
         .open(&path)
