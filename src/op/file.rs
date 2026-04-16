@@ -111,6 +111,7 @@ fn from_entry(path: &Path, cli: &Cli) -> Result<Option<(LyricsRequest, PathBuf)>
                 || ext.eq_ignore_ascii_case("alac")
                 || ext.eq_ignore_ascii_case("flac")
                 || ext.eq_ignore_ascii_case("mp3")
+                || ext.eq_ignore_ascii_case("m4a")
                 || ext.eq_ignore_ascii_case("ogg")
                 || ext.eq_ignore_ascii_case("opus")
                 || ext.eq_ignore_ascii_case("wav")
