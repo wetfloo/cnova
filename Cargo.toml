@@ -17,3 +17,6 @@ lto = "thin"
 # Without this, ci builds will fail
 [target.'cfg(all(target_os = "linux", any(target_env = "musl", not(any(target_arch = "x86", target_arch = "x86_64")))))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
+
+[dependencies]
+walkdir = "2.5.0"
