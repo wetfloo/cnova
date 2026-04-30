@@ -9,7 +9,7 @@ homepage = "https://github.com/wetfloo/cnova"
 repository = "https://github.com/wetfloo/cnova"
 readme = "README.md"
 version = "0.4.0"
-edition = "2021"
+edition = "2024"
 
 [profile.release]
 lto = "thin"
