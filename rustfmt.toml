@@ -1,0 +1,14 @@
+hard_tabs = true
+newline_style = "Unix"
+
+match_block_trailing_comma = true
+
+single_line_if_else_max_width = 0
+single_line_let_else_max_width = 0
+
+array_width = 40
+attr_fn_like_width = 40
+chain_width = 40
+fn_call_width = 40
+struct_lit_width = 15
+struct_variant_width = 15
