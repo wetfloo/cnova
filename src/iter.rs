@@ -7,7 +7,7 @@ pub trait IterExt: Iterator {
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E);
 
-	/// Drops any [Result::Err]
+	/// Drops any [Result::Err] passing along only [Result::Ok] inner values.
 	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized;
@@ -17,19 +17,20 @@ pub struct InspectError<N> {
 	inner_iter: N,
 }
 
-impl<N> InspectError<N> {
-	fn new<I, F, T, E>(iter: I, mut inspect: F) -> InspectError<impl Iterator<Item = I::Item>>
-	where
-		I: Iterator<Item = Result<T, E>>,
-		F: FnMut(&E),
-	{
-		InspectError {
-			inner_iter: iter.inspect(move |res| {
-				if let Err(e) = res {
-					inspect(e)
-				}
-			}),
-		}
+fn new_inspect_err<I, F, T, E>(
+	iter: I,
+	mut inspect: F,
+) -> InspectError<impl Iterator<Item = I::Item>>
+where
+	I: Iterator<Item = Result<T, E>>,
+	F: FnMut(&E),
+{
+	InspectError {
+		inner_iter: iter.inspect(move |res| {
+			if let Err(e) = res {
+				inspect(e)
+			}
+		}),
 	}
 }
 
@@ -52,19 +53,19 @@ impl<I> IterExt for I
 where
 	I: Iterator,
 {
-	fn inspect_err<T, E, F>(self, mut inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
+	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E),
 	{
-		InspectError::new(self, inspect)
+		new_inspect_err(self, inspect)
 	}
 
 	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 	{
-		DiscardError::new(self)
+		new_discard_err(self)
 	}
 }
 
@@ -88,18 +89,16 @@ where
 
 impl<N> FusedIterator for InspectError<N> where N: FusedIterator {}
 
-pub(crate) struct DiscardError<N> {
+pub struct DiscardError<N> {
 	inner_iter: N,
 }
 
-impl<N> DiscardError<N> {
-	fn new<I, T, E>(iter: I) -> DiscardError<impl Iterator<Item = T>>
-	where
-		I: Iterator<Item = Result<T, E>>,
-	{
-		DiscardError {
-			inner_iter: iter.filter_map(|res| res.ok()),
-		}
+fn new_discard_err<I, T, E>(iter: I) -> DiscardError<impl Iterator<Item = T>>
+where
+	I: Iterator<Item = Result<T, E>>,
+{
+	DiscardError {
+		inner_iter: iter.filter_map(|res| res.ok()),
 	}
 }
 
