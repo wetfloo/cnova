@@ -19,5 +19,9 @@ lto = "thin"
 openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
+itertools = { version = "0.14", default-features = false }
+lofty = "0.24.0"
 sqlite = "0.37.0"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["full"] }
 walkdir = "2.5.0"

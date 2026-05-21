@@ -1,12 +1,36 @@
 // TODO: remove when we're done.
 #![allow(unused)]
 
+use itertools::Itertools;
+
 use std::sync::Mutex;
 use std::time::Duration;
 use std::{env::home_dir, sync::LazyLock};
 
 use sqlite::ffi::sqlite3_stmt_status;
 use walkdir::WalkDir;
+
+trait IterExt {
+	fn process_err<T, E, F>(self, processor: F) -> impl Iterator<Item = Self::Item>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized,
+		F: Fn(&E),
+	{
+		self.inspect(move |res| match res {
+			Ok(_) => (),
+			Err(err) => processor(err),
+		})
+	}
+
+	fn discard_err<T, E>(self) -> impl Iterator<Item = T>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized,
+	{
+		self.filter_map(|res| res.ok())
+	}
+}
+
+impl<T> IterExt for T where T: Iterator {}
 
 trait LyricsHolder {
 	fn lyrics(metadata: &Metadata) -> Option<Lyrics>;
@@ -36,16 +60,18 @@ enum LyricsKind {
 
 struct LyricsResolveError;
 
-fn main() {}
+fn main() {
+	traverse();
+}
 
 fn traverse() {
 	let mut path = home_dir().unwrap();
 	path.push("Music/Experiment");
 
-	for item in WalkDir::new(&path)
+	let res: Vec<_> = WalkDir::new(&path)
 		.into_iter()
-		.filter_map(|res| res.ok())
-	{
-		println!("{:?}", item);
-	}
+		.inspect(|res| {
+			dbg!(res);
+		})
+		.collect();
 }
