@@ -1,31 +1,34 @@
 use std::iter::FusedIterator;
 
-pub(crate) trait IterExt: Iterator {
+pub trait IterExt: Iterator {
+	/// Allows you to inspect any [Result::Err]'s contents without modifying the iterator.
 	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E);
 
-	fn discard_err<T, E>(self) -> impl Iterator<Item = T>
+	/// Drops any [Result::Err]
+	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
 	where
-		Self: Iterator<Item = Result<T, E>> + Sized,
-	{
-		self.filter_map(|res| res.ok())
-	}
+		Self: Iterator<Item = Result<T, E>> + Sized;
 }
 
-pub(crate) struct InspectError<N> {
+pub struct InspectError<N> {
 	inner_iter: N,
 }
 
 impl<N> InspectError<N> {
-	fn new<I, F>(iter: I, f: F) -> InspectError<impl Iterator<Item = I::Item>>
+	fn new<I, F, T, E>(iter: I, mut inspect: F) -> InspectError<impl Iterator<Item = I::Item>>
 	where
-		I: Iterator,
-		F: FnMut(&I::Item),
+		I: Iterator<Item = Result<T, E>>,
+		F: FnMut(&E),
 	{
 		InspectError {
-			inner_iter: iter.inspect(f),
+			inner_iter: iter.inspect(move |res| {
+				if let Err(e) = res {
+					inspect(e)
+				}
+			}),
 		}
 	}
 }
@@ -54,13 +57,14 @@ where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E),
 	{
-		InspectError {
-			inner_iter: self.inspect(move |res| {
-				if let Err(err) = res {
-					inspect(err)
-				}
-			}),
-		}
+		InspectError::new(self, inspect)
+	}
+
+	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized,
+	{
+		DiscardError::new(self)
 	}
 }
 
