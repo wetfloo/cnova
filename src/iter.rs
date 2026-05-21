@@ -39,6 +39,10 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		self.inner_iter.next()
 	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+	    self.inner_iter.size_hint()
+	}
 }
 
 impl<I> IterExt for I
