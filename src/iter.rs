@@ -1,7 +1,7 @@
 use std::iter::FusedIterator;
 
 pub(crate) trait IterExt: Iterator {
-	fn process_err<T, E, F>(self, processor: F) -> ProcessError<impl Iterator<Item = Self::Item>>
+	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E);
@@ -14,23 +14,23 @@ pub(crate) trait IterExt: Iterator {
 	}
 }
 
-pub(crate) struct ProcessError<N> {
+pub(crate) struct InspectError<N> {
 	inner_iter: N,
 }
 
-impl<N> ProcessError<N> {
-	fn new<I, F>(iter: I, f: F) -> ProcessError<impl Iterator<Item = I::Item>>
+impl<N> InspectError<N> {
+	fn new<I, F>(iter: I, f: F) -> InspectError<impl Iterator<Item = I::Item>>
 	where
 		I: Iterator,
 		F: FnMut(&I::Item),
 	{
-		ProcessError {
+		InspectError {
 			inner_iter: iter.inspect(f),
 		}
 	}
 }
 
-impl<N> Iterator for ProcessError<N>
+impl<N> Iterator for InspectError<N>
 where
 	N: Iterator,
 {
@@ -49,25 +49,22 @@ impl<I> IterExt for I
 where
 	I: Iterator,
 {
-	fn process_err<T, E, F>(
-		self,
-		mut processor: F,
-	) -> ProcessError<impl Iterator<Item = Self::Item>>
+	fn inspect_err<T, E, F>(self, mut inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E),
 	{
-		ProcessError {
+		InspectError {
 			inner_iter: self.inspect(move |res| {
 				if let Err(err) = res {
-					processor(err)
+					inspect(err)
 				}
 			}),
 		}
 	}
 }
 
-impl<N> DoubleEndedIterator for ProcessError<N>
+impl<N> DoubleEndedIterator for InspectError<N>
 where
 	N: DoubleEndedIterator,
 {
@@ -76,7 +73,7 @@ where
 	}
 }
 
-impl<N> ExactSizeIterator for ProcessError<N>
+impl<N> ExactSizeIterator for InspectError<N>
 where
 	N: ExactSizeIterator,
 {
@@ -85,7 +82,7 @@ where
 	}
 }
 
-impl<N> FusedIterator for ProcessError<N> where N: FusedIterator {}
+impl<N> FusedIterator for InspectError<N> where N: FusedIterator {}
 
 pub(crate) struct DiscardError<N> {
 	inner_iter: N,
