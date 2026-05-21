@@ -19,4 +19,5 @@ lto = "thin"
 openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
+sqlite = "0.37.0"
 walkdir = "2.5.0"
