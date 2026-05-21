@@ -41,7 +41,7 @@ where
 	}
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
-	    self.inner_iter.size_hint()
+		self.inner_iter.size_hint()
 	}
 }
 
@@ -67,22 +67,65 @@ where
 	}
 }
 
-impl<I> DoubleEndedIterator for ProcessError<I>
+impl<N> DoubleEndedIterator for ProcessError<N>
 where
-	I: DoubleEndedIterator,
+	N: DoubleEndedIterator,
 {
 	fn next_back(&mut self) -> Option<Self::Item> {
 		self.inner_iter.next_back()
 	}
 }
 
-impl<I> ExactSizeIterator for ProcessError<I>
+impl<N> ExactSizeIterator for ProcessError<N>
 where
-	I: ExactSizeIterator,
+	N: ExactSizeIterator,
 {
 	fn len(&self) -> usize {
 		self.inner_iter.len()
 	}
 }
 
-impl<I> FusedIterator for ProcessError<I> where I: FusedIterator {}
+impl<N> FusedIterator for ProcessError<N> where N: FusedIterator {}
+
+pub(crate) struct DiscardError<N> {
+	inner_iter: N,
+}
+
+impl<N> DiscardError<N> {
+	fn new<I, T, E>(iter: I) -> DiscardError<impl Iterator<Item = T>>
+	where
+		I: Iterator<Item = Result<T, E>>,
+	{
+		DiscardError {
+			inner_iter: iter.filter_map(|res| res.ok()),
+		}
+	}
+}
+
+impl<N> Iterator for DiscardError<N>
+where
+	N: Iterator,
+{
+	type Item = N::Item;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.inner_iter.next()
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		// It can be empty if Results are all `Err`,
+		// but it can also be full of `Ok`s.
+		(0, self.inner_iter.size_hint().1)
+	}
+}
+
+impl<N> DoubleEndedIterator for DiscardError<N>
+where
+	N: DoubleEndedIterator,
+{
+	fn next_back(&mut self) -> Option<Self::Item> {
+		self.inner_iter.next_back()
+	}
+}
+
+impl<N> FusedIterator for DiscardError<N> where N: FusedIterator {}
