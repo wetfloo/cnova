@@ -24,4 +24,4 @@ sqlite = "0.37.0"
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["full"] }
 walkdir = "2.5.0"
-wetutil = { git = "https://github.com/wetfloo/wetutil.git", rev = "613a68d114b9858efa61b4ff06621de0e2249b48" }
+wetutil = { git = "https://github.com/wetfloo/wetutil.git", rev = "98148905b52fceb3610dae0e1c07d2345b126398" }
