@@ -11,12 +11,14 @@ pub trait IterExt: Iterator {
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E);
 
+	/// Allows you to inspect any [Result::Ok]'s contents without modifying the iterator.
 	fn inspect_ok<T, E, F>(self, inspect: F) -> InspectOk<Self, F>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&T);
 
 	/// Drops any [Result::Ok] passing along only [Result::Err] inner values.
+	///
 	/// ```
 	/// # use cnova::iter::IterExt;
 	/// let results = vec![
@@ -36,6 +38,21 @@ pub trait IterExt: Iterator {
 		Self: Iterator<Item = Result<T, E>> + Sized;
 
 	/// Drops any [Result::Err] passing along only [Result::Ok] inner values.
+	///
+	/// ```
+	/// # use cnova::iter::IterExt;
+	/// let results = vec![
+	///	    Ok(1),
+	///	    Err(2),
+	///	    Ok(3),
+	///	    Ok(4),
+	///	    Err(5),
+	///	    Err(6),
+	/// ];
+	///
+	/// let filtered: Vec<_> = results.into_iter().discard_err().collect();
+	/// assert_eq!(vec![1, 3, 4], filtered);
+	/// ```
 	fn discard_err<T, E>(self) -> DiscardError<Self>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized;
