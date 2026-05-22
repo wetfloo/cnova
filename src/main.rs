@@ -11,9 +11,6 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::{env::home_dir, sync::LazyLock};
 
-use cnova::IterExt as _;
-use cnova::result::ResultBothInto as _;
-use cnova::result::ResultErrInto as _;
 use lofty::error::LoftyError;
 use lofty::file::{AudioFile as _, TaggedFileExt as _};
 use lofty::file::{FileType as LoftyFileType, TaggedFile as LoftyTaggedFile};
@@ -22,6 +19,7 @@ use lofty::tag::ItemKey as LoftyItemKey;
 use lofty::tag::{Tag as LoftyTag, TagType as LoftyTagType};
 use sqlite::ffi::sqlite3_stmt_status;
 use walkdir::WalkDir;
+use wetutil::prelude::*;
 
 trait LyricsHolder {
 	fn lyrics(metadata: &Metadata) -> Option<Lyrics>;
