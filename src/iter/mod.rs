@@ -27,7 +27,7 @@ pub trait IterExt: Iterator {
 	///
 	/// ```
 	/// # use cnova::iter::IterExt;
-	/// let results = vec![
+	/// let results: [Result<u8, u8>; _] = [
 	///     Ok(1),
 	///     Err(2),
 	///     Ok(3),
@@ -56,7 +56,7 @@ pub trait IterExt: Iterator {
 	///
 	/// ```
 	/// # use cnova::iter::IterExt;
-	/// let results = vec![
+	/// let results: [Result<u8, u8>; _] = [
 	///     Ok(1),
 	///     Err(2),
 	///     Ok(3),
