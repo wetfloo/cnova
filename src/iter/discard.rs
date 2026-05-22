@@ -40,9 +40,17 @@ where
 	type Item = F::Out;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.inner_iter
-			.next()
-			.and_then(|val| self.f.call(val))
+		for val in self.inner_iter.by_ref() {
+			match self.f.call(val) {
+				Some(mapped) => return Some(mapped),
+				None => continue,
+			}
+		}
+		None
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(0, self.inner_iter.size_hint().1)
 	}
 }
 
@@ -52,9 +60,13 @@ where
 	F: DiscardSpecialCaseFn<N::Item>,
 {
 	fn next_back(&mut self) -> Option<Self::Item> {
-		self.inner_iter
-			.next_back()
-			.and_then(|val| self.f.call(val))
+		for val in self.inner_iter.by_ref().rev() {
+			match self.f.call(val) {
+				Some(mapped) => return Some(mapped),
+				None => continue,
+			}
+		}
+		None
 	}
 }
 
