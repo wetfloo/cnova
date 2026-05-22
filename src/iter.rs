@@ -1,4 +1,29 @@
 use std::iter::FusedIterator;
+use std::mem;
+
+struct InspectSpecialCase<N, F> {
+	inner_iter: N,
+	/// Function that will be called on every [Iterator::next] call.
+	f: F,
+}
+
+trait InspectSpecialCaseFn<T> {
+	fn call(&mut self, val: &T);
+}
+
+impl<'a, N, F> Iterator for InspectSpecialCase<N, F>
+where
+	N: Iterator,
+	F: InspectSpecialCaseFn<N::Item>,
+{
+	type Item = N::Item;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.inner_iter.next().inspect(|val| {
+			self.f.call(val);
+		})
+	}
+}
 
 pub trait IterExt: Iterator {
 	/// Allows you to inspect any [Result::Err]'s contents without modifying the iterator.
