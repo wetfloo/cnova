@@ -1,21 +1,25 @@
 // TODO: remove when we're done.
 #![allow(unused)]
 
-use cnova::IterExt;
-use lofty::error::LoftyError;
-use lofty::file::TaggedFile as LoftyTaggedFile;
-use lofty::file::{AudioFile as _, TaggedFileExt as _};
-use lofty::probe::Probe as LoftyProbe;
-use lofty::tag::ItemKey as LoftyItemKey;
-use lofty::tag::{Tag as LoftyTag, TagType as LoftyTagType};
+use std::error::Error;
 use std::fs::FileType;
 use std::fs::OpenOptions;
+use std::io;
 use std::iter::Inspect;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::{env::home_dir, sync::LazyLock};
 
+use cnova::IterExt as _;
+use cnova::result::ResultBothInto as _;
+use cnova::result::ResultErrInto as _;
+use lofty::error::LoftyError;
+use lofty::file::{AudioFile as _, TaggedFileExt as _};
+use lofty::file::{FileType as LoftyFileType, TaggedFile as LoftyTaggedFile};
+use lofty::probe::Probe as LoftyProbe;
+use lofty::tag::ItemKey as LoftyItemKey;
+use lofty::tag::{Tag as LoftyTag, TagType as LoftyTagType};
 use sqlite::ffi::sqlite3_stmt_status;
 use walkdir::WalkDir;
 
@@ -55,56 +59,50 @@ fn traverse() {
 	let mut path = home_dir().unwrap();
 	path.push("Music/Experiment");
 
-	for dir_entry in WalkDir::new(&path)
+	for entry_path in WalkDir::new(&path)
 		.into_iter()
 		.inspect_err(|err| {
 			// TODO::logging
 			dbg!(err);
 		})
 		.discard_err()
-		.filter(|dir_entry| {
-			dir_entry.file_type().is_file()
-				&& dir_entry
-					.path()
-					.extension()
-					.is_some_and(|ext| ext == "flac")
-		}) {
-		let entry_path = dir_entry.path();
-		match handle_file_guessing(entry_path) {
-			Ok(mut tagged_file) => {
-				for tt in tagged_file.tag_types_to_write() {
-					// TODO::logging
-					dbg!(&tt);
-					if let Some(tag) = tagged_file.tag_mut(tt) {
-						// TODO::logging
-						dbg!(tag.insert_text(
-							LoftyItemKey::Lyrics,
-							"I've been here before!".to_owned(),
-						));
-					}
-				}
-
-				let mut file = OpenOptions::new()
-					.read(true)
-					.write(true)
-					.open(entry_path)
-					// TODO::unwrap
-					.unwrap();
-				tagged_file
-					// TODO::unwrap
-					.save_to(&mut file, Default::default())
-					.unwrap();
-			},
-
-			Err(err) => {
-				// TODO::logging
-				dbg!(&err);
-			},
-		}
+		.filter(|dir_entry| dir_entry.file_type().is_file())
+		.map(|dir_entry| dir_entry.into_path())
+	{
+		update_file_tags(&entry_path);
 	}
 }
 
-fn handle_file_guessing<P>(path: P) -> Result<LoftyTaggedFile, LoftyError>
+// TODO::error_handling: change the return type to not box explicitly.
+fn update_file_tags<P>(path: P) -> Result<(), Box<dyn Error>>
+where
+	P: AsRef<Path>,
+{
+	let mut tagged_file = handle_file_guessing(path.as_ref())?;
+
+	for tt in tagged_file.tag_types_to_write() {
+		// TODO::logging
+		dbg!(&tt);
+
+		if let Some(tag) = tagged_file.tag_mut(tt) {
+			// TODO::logging
+			dbg!(tag.insert_text(
+				LoftyItemKey::Lyrics,
+				"I've been here before!".to_owned(),
+			));
+		}
+	}
+
+	let mut dest_file = OpenOptions::new()
+		.read(true)
+		.write(true)
+		.open(path.as_ref())?;
+	tagged_file.save_to(&mut dest_file, Default::default())?;
+
+	Ok(())
+}
+
+fn handle_file_guessing<P>(path: P) -> Result<LoftyTaggedFile, GuessFileError>
 where
 	P: AsRef<Path>,
 {
@@ -112,6 +110,26 @@ where
 	LoftyProbe::open(path)?
 		.guess_file_type()?
 		.read()
+		.err_into()
+		.and_then(|tagged_file| {
+			match tagged_file.file_type() {
+				// Do not support custom file types, since we wouldn't be able to write
+				// their tags anyway. Also, it gets rid of "non-music" file problem
+				// (.jpg, .png, .lrc, etc.).
+				LoftyFileType::Custom(ft) => Err(GuessFileError::InvalidFileType(ft)),
+				_ => Ok(tagged_file),
+			}
+		})
+}
+
+#[derive(Debug, thiserror::Error)]
+enum GuessFileError {
+	#[error("Unsupported file type: {0}")]
+	InvalidFileType(&'static str),
+	#[error(transparent)]
+	Lofty(#[from] LoftyError),
+	#[error(transparent)]
+	Io(#[from] io::Error),
 }
 
 struct TagTypesToWrite {
