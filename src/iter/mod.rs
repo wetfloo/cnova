@@ -70,8 +70,4 @@ pub trait IterExt: Iterator {
 	}
 }
 
-impl<I> IterExt for I
-where
-	I: Iterator,
-{
-}
+impl<I> IterExt for I where I: Iterator {}
