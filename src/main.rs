@@ -2,7 +2,6 @@
 #![allow(unused)]
 
 use cnova::iter::IterExt;
-use itertools::Itertools;
 
 use std::iter::Inspect;
 use std::sync::Mutex;
