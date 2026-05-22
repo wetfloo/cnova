@@ -58,16 +58,6 @@ where
 	}
 }
 
-impl<N, T, E, F> ExactSizeIterator for DiscardSpecialCase<N, F>
-where
-	N: ExactSizeIterator<Item = Result<T, E>>,
-	F: DiscardSpecialCaseFn<N::Item>,
-{
-	fn len(&self) -> usize {
-		self.inner_iter.len()
-	}
-}
-
 impl<N, T, E> FusedIterator for DiscardError<N> where N: FusedIterator<Item = Result<T, E>> {}
 
 pub trait DiscardSpecialCaseFn<T> {
