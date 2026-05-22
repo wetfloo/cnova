@@ -1,8 +1,7 @@
 // TODO: remove when we're done.
 #![allow(unused)]
 
-mod iter;
-
+use cnova::iter::IterExt;
 use itertools::Itertools;
 
 use std::iter::Inspect;
@@ -49,10 +48,10 @@ fn traverse() {
 	let mut path = home_dir().unwrap();
 	path.push("Music/Experiment");
 
-	let res: Vec<_> = WalkDir::new(&path)
+	WalkDir::new(&path)
 		.into_iter()
-		.inspect(|res| {
-			dbg!(res);
+		.inspect_err(|err| {
+			dbg!(err);
 		})
-		.collect();
+		.discard_err();
 }
