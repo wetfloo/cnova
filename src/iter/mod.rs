@@ -17,6 +17,20 @@ pub trait IterExt: Iterator {
 		F: FnMut(&T);
 
 	/// Drops any [Result::Ok] passing along only [Result::Err] inner values.
+	/// ```
+	/// # use cnova::iter::IterExt;
+	/// let results = vec![
+	///	    Ok(1),
+	///	    Err(2),
+	///	    Ok(3),
+	///	    Ok(4),
+	///	    Err(5),
+	///	    Err(6),
+	/// ];
+	///
+	/// let filtered: Vec<_> = results.into_iter().discard_ok().collect();
+	/// assert_eq!(vec![2, 5, 6], filtered);
+	/// ```
 	fn discard_ok<T, E>(self) -> DiscardOk<Self>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized;
