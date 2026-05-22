@@ -4,6 +4,7 @@ use std::mem;
 struct InspectSpecialCase<N, F> {
 	inner_iter: N,
 	/// Function that will be called on every [Iterator::next] call.
+	/// Should only be called if deemed appropriate.
 	f: F,
 }
 
@@ -11,7 +12,7 @@ trait InspectSpecialCaseFn<T> {
 	fn call(&mut self, val: &T);
 }
 
-impl<'a, N, F> Iterator for InspectSpecialCase<N, F>
+impl<N, F> Iterator for InspectSpecialCase<N, F>
 where
 	N: Iterator,
 	F: InspectSpecialCaseFn<N::Item>,
@@ -25,6 +26,32 @@ where
 	}
 }
 
+struct InspectSpecialCaseFnErr<F>(F);
+
+impl<F, T, E> InspectSpecialCaseFn<Result<T, E>> for InspectSpecialCaseFnErr<F>
+where
+	F: FnMut(&E),
+{
+	fn call(&mut self, val: &Result<T, E>) {
+		if let Err(e) = val.as_ref() {
+			self.0(e)
+		}
+	}
+}
+
+struct InspectSpecialCaseFnOk<F>(F);
+
+impl<F, T, E> InspectSpecialCaseFn<Result<T, E>> for InspectSpecialCaseFnOk<F>
+where
+	F: FnMut(&T),
+{
+	fn call(&mut self, val: &Result<T, E>) {
+		if let Ok(v) = val.as_ref() {
+			self.0(v)
+		}
+	}
+}
+
 pub trait IterExt: Iterator {
 	/// Allows you to inspect any [Result::Err]'s contents without modifying the iterator.
 	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
@@ -32,11 +59,18 @@ pub trait IterExt: Iterator {
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E);
 
+	fn inspect_ok<T, E, F>(self, inspect: F) -> InspectOk<impl Iterator<Item = Self::Item>, F>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized,
+		F: FnMut(&T);
+
 	/// Drops any [Result::Err] passing along only [Result::Ok] inner values.
 	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized;
 }
+
+type InspectOk<N, F> = InspectSpecialCase<N, InspectSpecialCaseFnOk<F>>;
 
 pub struct InspectError<N> {
 	inner_iter: N,
@@ -84,6 +118,17 @@ where
 		F: FnMut(&E),
 	{
 		new_inspect_err(self, inspect)
+	}
+
+	fn inspect_ok<T, E, F>(self, inspect: F) -> InspectOk<Self, F>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized,
+		F: FnMut(&T),
+	{
+		InspectOk {
+			inner_iter: self,
+			f: InspectSpecialCaseFnOk(inspect),
+		}
 	}
 
 	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
