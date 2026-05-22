@@ -1,7 +1,7 @@
 // TODO: remove when we're done.
 #![allow(unused)]
 
-use cnova::iter::IterExt;
+use cnova::IterExt;
 
 use std::iter::Inspect;
 use std::sync::Mutex;
