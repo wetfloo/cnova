@@ -73,6 +73,8 @@ fn traverse() {
 		match handle_file_guessing(entry_path) {
 			Ok(mut tagged_file) => {
 				for tt in tagged_file.tag_types_to_write() {
+					// TODO::logging
+					dbg!(&tt);
 					if let Some(tag) = tagged_file.tag_mut(tt) {
 						// TODO::logging
 						dbg!(tag.insert_text(
