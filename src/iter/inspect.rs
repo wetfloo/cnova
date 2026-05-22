@@ -57,7 +57,6 @@ where
 {
 }
 
-
 impl<N, F> InspectSpecialCase<N, InspectSpecialCaseFnError<F>> {
 	pub(crate) fn new<T, E>(inner_iter: N, f: F) -> Self
 	where
@@ -84,7 +83,7 @@ impl<N, F> InspectSpecialCase<N, InspectSpecialCaseFnOk<F>> {
 	}
 }
 
-trait InspectSpecialCaseFn<T> {
+pub(crate) trait InspectSpecialCaseFn<T> {
 	fn call(&mut self, val: &T);
 }
 
