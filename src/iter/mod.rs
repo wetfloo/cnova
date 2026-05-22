@@ -1,9 +1,8 @@
 mod discard;
 mod inspect;
 
-use inspect::{InspectError, InspectOk};
-
 use crate::iter::discard::{DiscardError, DiscardOk};
+use inspect::{InspectError, InspectOk};
 
 pub trait IterExt: Iterator {
 	/// Allows you to inspect any [Result::Err]'s contents without modifying the iterator.
