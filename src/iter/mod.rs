@@ -36,8 +36,14 @@ pub trait IterExt: Iterator {
 	///     Err(6),
 	/// ];
 	///
-	/// let filtered: Vec<_> = results.into_iter().discard_ok().collect();
-	/// assert_eq!(vec![2, 5, 6], filtered);
+	/// let mut filtered_iter = results
+	///     .into_iter()
+	///     .discard_ok();
+	///
+	/// assert_eq!(Some(2), filtered_iter.next());
+	/// assert_eq!(Some(5), filtered_iter.next());
+	/// assert_eq!(Some(6), filtered_iter.next());
+	/// assert_eq!(None, filtered_iter.next());
 	/// ```
 	fn discard_ok<T, E>(self) -> DiscardOk<Self>
 	where
@@ -59,8 +65,14 @@ pub trait IterExt: Iterator {
 	///     Err(6),
 	/// ];
 	///
-	/// let filtered: Vec<_> = results.into_iter().discard_err().collect();
-	/// assert_eq!(vec![1, 3, 4], filtered);
+	/// let mut filtered_iter = results
+	///     .into_iter()
+	///     .discard_err();
+	///
+	/// assert_eq!(Some(1), filtered_iter.next());
+	/// assert_eq!(Some(3), filtered_iter.next());
+	/// assert_eq!(Some(4), filtered_iter.next());
+	/// assert_eq!(None, filtered_iter.next());
 	/// ```
 	fn discard_err<T, E>(self) -> DiscardError<Self>
 	where
