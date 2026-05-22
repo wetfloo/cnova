@@ -78,11 +78,11 @@ where
 {
 	let mut tagged_file = handle_file_guessing(path.as_ref())?;
 
-	for tt in tagged_file.tag_types_to_write() {
+	for tag_type in tagged_file.tag_types_to_write() {
 		// TODO::logging
-		dbg!(&tt);
+		dbg!(&tag_type);
 
-		if let Some(tag) = tagged_file.tag_mut(tt) {
+		if let Some(tag) = tagged_file.tag_mut(tag_type) {
 			// TODO::logging
 			dbg!(tag.insert_text(
 				LoftyItemKey::Lyrics,
@@ -131,14 +131,14 @@ enum GuessFileError {
 }
 
 struct TagTypesToWrite {
-	tt: LoftyTagType,
+	tag_type: LoftyTagType,
 	primary_shown: bool,
 }
 
 impl TagTypesToWrite {
-	fn new(tt: LoftyTagType) -> Self {
+	fn new(tag_type: LoftyTagType) -> Self {
 		Self {
-			tt,
+			tag_type,
 			primary_shown: false,
 		}
 	}
@@ -148,10 +148,10 @@ impl Iterator for TagTypesToWrite {
 	type Item = LoftyTagType;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match (self.primary_shown, self.tt) {
-			(false, tt) => {
+		match (self.primary_shown, self.tag_type) {
+			(false, tag_type) => {
 				self.primary_shown = true;
-				Some(tt)
+				Some(tag_type)
 			},
 			(true, LoftyTagType::Id3v2) => Some(LoftyTagType::Id3v1),
 			(true, _) => None,
