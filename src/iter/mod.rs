@@ -5,7 +5,7 @@ use crate::iter::discard::{DiscardError, DiscardOk};
 use inspect::{InspectError, InspectOk};
 
 pub trait IterExt: Iterator {
-	/// Allows you to inspect any [Result::Ok]'s contents without modifying the iterator.
+	/// Allows you to inspect any [Ok] contents without modifying the iterator.
 	fn inspect_ok<T, E, F>(self, inspect: F) -> InspectOk<Self, F>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
@@ -14,7 +14,7 @@ pub trait IterExt: Iterator {
 		InspectOk::new(self, inspect)
 	}
 
-	/// Allows you to inspect any [Result::Err]'s contents without modifying the iterator.
+	/// Allows you to inspect any [Err] contents without modifying the iterator.
 	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<Self, F>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
@@ -23,7 +23,7 @@ pub trait IterExt: Iterator {
 		InspectError::new(self, inspect)
 	}
 
-	/// Drops any [Result::Ok] passing along only [Result::Err] inner values.
+	/// Drops any [Ok], passing along only [Err] contents.
 	///
 	/// ```
 	/// # use cnova::iter::IterExt;
@@ -46,7 +46,7 @@ pub trait IterExt: Iterator {
 		DiscardOk::new(self)
 	}
 
-	/// Drops any [Result::Err] passing along only [Result::Ok] inner values.
+	/// Drops any [Err], passing along only [Ok] contents.
 	///
 	/// ```
 	/// # use cnova::iter::IterExt;
