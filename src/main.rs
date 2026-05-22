@@ -74,6 +74,7 @@ fn traverse() {
 			Ok(mut tagged_file) => {
 				for tt in tagged_file.tag_types_to_write() {
 					if let Some(tag) = tagged_file.tag_mut(tt) {
+						// TODO::logging
 						dbg!(tag.insert_text(
 							LoftyItemKey::Lyrics,
 							"I've been here before!".to_owned(),
@@ -94,6 +95,7 @@ fn traverse() {
 			},
 
 			Err(err) => {
+				// TODO::logging
 				dbg!(&err);
 			},
 		}
