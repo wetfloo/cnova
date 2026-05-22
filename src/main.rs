@@ -47,10 +47,14 @@ fn traverse() {
 	let mut path = home_dir().unwrap();
 	path.push("Music/Experiment");
 
-	WalkDir::new(&path)
+	let _: Vec<_> = WalkDir::new(&path)
 		.into_iter()
 		.inspect_err(|err| {
 			dbg!(err);
 		})
-		.discard_err();
+		.inspect_ok(|val| {
+			dbg!(val);
+		})
+		.discard_err()
+		.collect();
 }
