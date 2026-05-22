@@ -22,6 +22,10 @@ where
 			.next()
 			.inspect(|val| self.f.call(val))
 	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.inner_iter.size_hint()
+	}
 }
 
 impl<N, T, E, F> DoubleEndedIterator for InspectSpecialCase<N, F>
