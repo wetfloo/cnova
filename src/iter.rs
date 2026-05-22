@@ -1,6 +1,24 @@
 use std::iter::FusedIterator;
 use std::mem;
 
+pub trait IterExt: Iterator {
+	/// Allows you to inspect any [Result::Err]'s contents without modifying the iterator.
+	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<Self, F>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized,
+		F: FnMut(&E);
+
+	fn inspect_ok<T, E, F>(self, inspect: F) -> InspectOk<Self, F>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized,
+		F: FnMut(&T);
+
+	/// Drops any [Result::Err] passing along only [Result::Ok] inner values.
+	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
+	where
+		Self: Iterator<Item = Result<T, E>> + Sized;
+}
+
 struct InspectSpecialCase<N, F> {
 	inner_iter: N,
 	/// Function that will be called on every [Iterator::next] call.
@@ -20,15 +38,13 @@ where
 	type Item = N::Item;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.inner_iter.next().inspect(|val| {
-			self.f.call(val);
-		})
+		self.inner_iter
+			.next()
+			.inspect(|val| self.f.call(val))
 	}
 }
 
-struct InspectSpecialCaseFnErr<F>(F);
-
-impl<F, T, E> InspectSpecialCaseFn<Result<T, E>> for InspectSpecialCaseFnErr<F>
+impl<T, E, F> InspectSpecialCaseFn<Result<T, E>> for InspectSpecialCaseFnError<F>
 where
 	F: FnMut(&E),
 {
@@ -41,7 +57,7 @@ where
 
 struct InspectSpecialCaseFnOk<F>(F);
 
-impl<F, T, E> InspectSpecialCaseFn<Result<T, E>> for InspectSpecialCaseFnOk<F>
+impl<T, E, F> InspectSpecialCaseFn<Result<T, E>> for InspectSpecialCaseFnOk<F>
 where
 	F: FnMut(&T),
 {
@@ -52,72 +68,24 @@ where
 	}
 }
 
-pub trait IterExt: Iterator {
-	/// Allows you to inspect any [Result::Err]'s contents without modifying the iterator.
-	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
-	where
-		Self: Iterator<Item = Result<T, E>> + Sized,
-		F: FnMut(&E);
-
-	fn inspect_ok<T, E, F>(self, inspect: F) -> InspectOk<impl Iterator<Item = Self::Item>, F>
-	where
-		Self: Iterator<Item = Result<T, E>> + Sized,
-		F: FnMut(&T);
-
-	/// Drops any [Result::Err] passing along only [Result::Ok] inner values.
-	fn discard_err<T, E>(self) -> DiscardError<impl Iterator<Item = T>>
-	where
-		Self: Iterator<Item = Result<T, E>> + Sized;
-}
-
 type InspectOk<N, F> = InspectSpecialCase<N, InspectSpecialCaseFnOk<F>>;
+type InspectError<N, F> = InspectSpecialCase<N, InspectSpecialCaseFnError<F>>;
 
-pub struct InspectError<N> {
-	inner_iter: N,
-}
-
-fn new_inspect_err<I, F, T, E>(
-	iter: I,
-	mut inspect: F,
-) -> InspectError<impl Iterator<Item = I::Item>>
-where
-	I: Iterator<Item = Result<T, E>>,
-	F: FnMut(&E),
-{
-	InspectError {
-		inner_iter: iter.inspect(move |res| {
-			if let Err(e) = res {
-				inspect(e)
-			}
-		}),
-	}
-}
-
-impl<N> Iterator for InspectError<N>
-where
-	N: Iterator,
-{
-	type Item = N::Item;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner_iter.next()
-	}
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.inner_iter.size_hint()
-	}
-}
+struct InspectSpecialCaseFnError<F>(F);
 
 impl<I> IterExt for I
 where
 	I: Iterator,
 {
-	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<impl Iterator<Item = Self::Item>>
+	fn inspect_err<T, E, F>(self, inspect: F) -> InspectError<Self, F>
 	where
 		Self: Iterator<Item = Result<T, E>> + Sized,
 		F: FnMut(&E),
 	{
-		new_inspect_err(self, inspect)
+		InspectError {
+			inner_iter: self,
+			f: InspectSpecialCaseFnError(inspect),
+		}
 	}
 
 	fn inspect_ok<T, E, F>(self, inspect: F) -> InspectOk<Self, F>
@@ -139,25 +107,34 @@ where
 	}
 }
 
-impl<N> DoubleEndedIterator for InspectError<N>
+impl<N, T, E, F> DoubleEndedIterator for InspectSpecialCase<N, F>
 where
-	N: DoubleEndedIterator,
+	N: DoubleEndedIterator<Item = Result<T, E>>,
+	F: InspectSpecialCaseFn<N::Item>,
 {
 	fn next_back(&mut self) -> Option<Self::Item> {
-		self.inner_iter.next_back()
+		self.inner_iter
+			.next_back()
+			.inspect(|val| self.f.call(val))
 	}
 }
 
-impl<N> ExactSizeIterator for InspectError<N>
+impl<N, T, E, F> ExactSizeIterator for InspectSpecialCase<N, F>
 where
-	N: ExactSizeIterator,
+	N: ExactSizeIterator<Item = Result<T, E>>,
+	F: InspectSpecialCaseFn<N::Item>,
 {
 	fn len(&self) -> usize {
 		self.inner_iter.len()
 	}
 }
 
-impl<N> FusedIterator for InspectError<N> where N: FusedIterator {}
+impl<N, T, E, F> FusedIterator for InspectError<N, F>
+where
+	N: FusedIterator<Item = Result<T, E>>,
+	F: FnMut(&E),
+{
+}
 
 pub struct DiscardError<N> {
 	inner_iter: N,
