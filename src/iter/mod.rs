@@ -28,12 +28,12 @@ pub trait IterExt: Iterator {
 	/// ```
 	/// # use cnova::iter::IterExt;
 	/// let results = vec![
-	///	    Ok(1),
-	///	    Err(2),
-	///	    Ok(3),
-	///	    Ok(4),
-	///	    Err(5),
-	///	    Err(6),
+	///     Ok(1),
+	///     Err(2),
+	///     Ok(3),
+	///     Ok(4),
+	///     Err(5),
+	///     Err(6),
 	/// ];
 	///
 	/// let filtered: Vec<_> = results.into_iter().discard_ok().collect();
@@ -51,12 +51,12 @@ pub trait IterExt: Iterator {
 	/// ```
 	/// # use cnova::iter::IterExt;
 	/// let results = vec![
-	///	    Ok(1),
-	///	    Err(2),
-	///	    Ok(3),
-	///	    Ok(4),
-	///	    Err(5),
-	///	    Err(6),
+	///     Ok(1),
+	///     Err(2),
+	///     Ok(3),
+	///     Ok(4),
+	///     Err(5),
+	///     Err(6),
 	/// ];
 	///
 	/// let filtered: Vec<_> = results.into_iter().discard_err().collect();
