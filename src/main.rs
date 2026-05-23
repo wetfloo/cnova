@@ -65,12 +65,18 @@ async fn main() {
 			// instead of spawning a task for every file.
 			tagging_worker_handles.spawn_blocking(move || {
 				let path = dir_entry.into_path();
-				// TODO::error_handling: remove unwrap,
-				// log cases when we couldn't open (or read tags of) the file
-				let tagged_file = handle_file_guessing(&path).unwrap();
-				tagged_tx.send((tagged_file, path));
+				match handle_file_guessing(&path) {
+					Ok(tagged_file) => {
+						tagged_tx.send((tagged_file, path));
+					},
+					Err(guess_err) => {
+						// TODO::logging
+						dbg!(guess_err);
+					},
+				}
 			});
 		}
+
 		tagging_worker_handles.join_all().await;
 	});
 
@@ -80,7 +86,7 @@ async fn main() {
 		while let Some((tagged_file, path)) = tagged_rx.recv().await {
 			let lrc_tx = lrc_tx.clone();
 			networking_worker_handles.spawn(async move {
-				todo!("some network async work here");
+				// TODO: some networking here.
 				// TODO: better lyrics type here than a plain `String`.
 				lrc_tx.send((
 					"some lyrics here".to_owned(),
@@ -89,6 +95,7 @@ async fn main() {
 				));
 			});
 		}
+
 		networking_worker_handles
 			.join_all()
 			.await;
@@ -98,8 +105,11 @@ async fn main() {
 	join_set.spawn(async move {
 		let mut writing_worker_handles = JoinSet::new();
 		while let Some((lyrics, tagged_file, path)) = lrc_rx.recv().await {
-			writing_worker_handles.spawn(async { todo!("some network async work here") });
+			writing_worker_handles.spawn_blocking(|| {
+				// TODO: write tags back to files.
+			});
 		}
+
 		writing_worker_handles.join_all().await;
 	});
 
@@ -129,15 +139,6 @@ where
 			tx.send(entry_path).unwrap();
 		}
 	}
-}
-
-async fn tag_entry<'a>(path: Cow<'a, Path>) {
-	// TODO::perf don't await, just pipeline all the steps
-	// (reading file tags, network requests, writing tags)
-	let path = path.into_owned();
-	let tagged_file = task::spawn_blocking(move || handle_file_guessing(path)).await;
-	let network_req = todo!("add a network request here");
-	let tags_write_handle = todo!("add the ability to write tags here");
 }
 
 trait LyricsHolder {
