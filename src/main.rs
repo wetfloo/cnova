@@ -48,48 +48,62 @@ async fn main() {
 	path.push("Music/Experiment");
 	paths.push(path);
 
+	let mut join_set = JoinSet::new();
+
 	// Step 1: discover all the files.
 	//
 	// Walk the file structure in a separate task,
 	// without blocking tokio's executors for async tasks.
-	let untagged_worker_handle =
-		tokio::task::spawn_blocking(move || traverse_v2(&untagged_tx, paths));
+	join_set.spawn_blocking(move || traverse_v2(&untagged_tx, paths));
 
 	// Step 2: read file tags, when possible.
-	let mut tagging_worker_handles = JoinSet::new();
-	while let Some(dir_entry) = untagged_rx.recv().await {
-		// TODO::perf consider using rayon's thread pool
-		// instead of spawning a task for every file.
-		let tagged_tx = tagged_tx.clone();
-		tagging_worker_handles.spawn_blocking(move || {
-			let path = dir_entry.into_path();
-			// TODO::error_handling: remove unwrap,
-			// log cases when we couldn't open (or read tags of) the file
-			let tagged_file = handle_file_guessing(&path).unwrap();
-			tagged_tx.send((tagged_file, path));
-		});
-	}
+	join_set.spawn(async move {
+		let mut tagging_worker_handles = JoinSet::new();
+		while let Some(dir_entry) = untagged_rx.recv().await {
+			let tagged_tx = tagged_tx.clone();
+			// TODO::perf consider using rayon's thread pool
+			// instead of spawning a task for every file.
+			tagging_worker_handles.spawn_blocking(move || {
+				let path = dir_entry.into_path();
+				// TODO::error_handling: remove unwrap,
+				// log cases when we couldn't open (or read tags of) the file
+				let tagged_file = handle_file_guessing(&path).unwrap();
+				tagged_tx.send((tagged_file, path));
+			});
+		}
+		tagging_worker_handles.join_all().await;
+	});
 
 	// Step 3: use file tags to request lyrics
-	let mut networking_worker_handles = JoinSet::new();
-	while let Some((tagged_file, path)) = tagged_rx.recv().await {
-		let lrc_tx = lrc_tx.clone();
-		networking_worker_handles.spawn(async move {
-			todo!("some network async work here");
-			// TODO: better lyrics type here than a plain `String`.
-			lrc_tx.send((
-				"some lyrics here".to_owned(),
-				tagged_file,
-				path,
-			));
-		});
-	}
+	join_set.spawn(async move {
+		let mut networking_worker_handles = JoinSet::new();
+		while let Some((tagged_file, path)) = tagged_rx.recv().await {
+			let lrc_tx = lrc_tx.clone();
+			networking_worker_handles.spawn(async move {
+				todo!("some network async work here");
+				// TODO: better lyrics type here than a plain `String`.
+				lrc_tx.send((
+					"some lyrics here".to_owned(),
+					tagged_file,
+					path,
+				));
+			});
+		}
+		networking_worker_handles
+			.join_all()
+			.await;
+	});
 
 	// Step 4: write lyrics tags back to files.
-	let mut writing_worker_handles = JoinSet::new();
-	while let Some((lyrics, tagged_file, path)) = lrc_rx.recv().await {
-		writing_worker_handles.spawn(async { todo!("some network async work here") });
-	}
+	join_set.spawn(async move {
+		let mut writing_worker_handles = JoinSet::new();
+		while let Some((lyrics, tagged_file, path)) = lrc_rx.recv().await {
+			writing_worker_handles.spawn(async { todo!("some network async work here") });
+		}
+		writing_worker_handles.join_all().await;
+	});
+
+	join_set.join_all().await;
 }
 
 /// Traverse `paths` recursively,
