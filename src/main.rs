@@ -7,6 +7,7 @@ use std::fs::OpenOptions;
 use std::io;
 use std::iter::Inspect;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::{env::home_dir, sync::LazyLock};
@@ -18,8 +19,76 @@ use lofty::probe::Probe as LoftyProbe;
 use lofty::tag::ItemKey as LoftyItemKey;
 use lofty::tag::{Tag as LoftyTag, TagType as LoftyTagType};
 use sqlite::ffi::sqlite3_stmt_status;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
+use tokio::task;
+use tokio::task::JoinSet;
 use walkdir::WalkDir;
 use wetutil::prelude::*;
+
+type EntryTx = UnboundedSender<PathBuf>;
+type EntryRx = UnboundedReceiver<PathBuf>;
+
+#[tokio::main]
+async fn main() {
+	let (tx, mut rx) = tokio_unbounded_channel();
+
+	let mut paths = Vec::new();
+	let mut path = home_dir().unwrap();
+	path.push("Music/Experiment");
+	paths.push(path);
+
+	// Walk the file structure in a separate thread,
+	// without blocking tokio's executors for async tasks.
+	let tx_join_handle = task::spawn_blocking(move || traverse_v2(&tx, paths));
+	// Get the results from a single async task,
+	// that's able to spawn a task for each entry.
+	let rx_join_handle = task::spawn(async move {
+		tag_all(&mut rx).await;
+	});
+	tx_join_handle.await;
+	rx_join_handle.await;
+}
+
+fn traverse_v2<I, P>(tx: &EntryTx, paths: I)
+where
+	I: IntoIterator<Item = P>,
+	P: AsRef<Path>,
+{
+	for path in paths {
+		for entry_path in WalkDir::new(&path)
+			.into_iter()
+			.inspect_err(|err| {
+				// TODO::logging
+				dbg!(err);
+			})
+			.discard_err()
+			.filter(|dir_entry| dir_entry.file_type().is_file())
+			.map(|dir_entry| dir_entry.into_path())
+		{
+			// TODO::error_handling: remove unwrap,
+			// (replace with `expect` that the channel will never be closed?)
+			tx.send(entry_path).unwrap();
+		}
+	}
+}
+
+async fn tag_all(rx: &mut EntryRx) {
+	let mut join_set = JoinSet::new();
+	let mut abort_handles = Vec::new();
+
+	while let Some(v) = rx.recv().await {
+		let abort_handle = join_set.spawn(tag_entry());
+		abort_handles.push(abort_handle);
+	}
+
+	join_set.join_all().await;
+}
+
+async fn tag_entry() {
+	todo!("do some useful work here")
+}
 
 trait LyricsHolder {
 	fn lyrics(metadata: &Metadata) -> Option<Lyrics>;
@@ -48,10 +117,6 @@ enum LyricsKind {
 }
 
 struct LyricsResolveError;
-
-fn main() {
-	traverse();
-}
 
 fn traverse() {
 	let mut path = home_dir().unwrap();
