@@ -45,12 +45,14 @@ async fn main() {
 	// Get the results from a single async task,
 	// that's able to spawn a task for each entry.
 	let rx_join_handle = task::spawn(async move {
-		tag_all(&mut rx).await;
+		handle_entries(&mut rx).await;
 	});
 	tx_join_handle.await;
 	rx_join_handle.await;
 }
 
+/// Traverse `paths` recursively,
+/// sending any file (not a directory!) to `tx`.
 fn traverse_v2<I, P>(tx: &EntryTx, paths: I)
 where
 	I: IntoIterator<Item = P>,
@@ -74,7 +76,11 @@ where
 	}
 }
 
-async fn tag_all(rx: &mut EntryRx) {
+// TODO::doc appropriate by who?
+// Add a semaphore description here when it's added
+/// Get the contents of `rx`,
+/// spawning at max as many tasks as deemed appropriate
+async fn handle_entries(rx: &mut EntryRx) {
 	let mut join_set = JoinSet::new();
 	let mut abort_handles = Vec::new();
 
