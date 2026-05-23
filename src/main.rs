@@ -1,6 +1,7 @@
 // TODO: remove when we're done.
 #![allow(unused)]
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fs::FileType;
 use std::fs::OpenOptions;
@@ -84,16 +85,21 @@ async fn handle_entries(rx: &mut EntryRx) {
 	let mut join_set = JoinSet::new();
 	let mut abort_handles = Vec::new();
 
-	while let Some(v) = rx.recv().await {
-		let abort_handle = join_set.spawn(tag_entry());
+	while let Some(p) = rx.recv().await {
+		let abort_handle = join_set.spawn(tag_entry(Cow::Owned(p)));
 		abort_handles.push(abort_handle);
 	}
 
 	join_set.join_all().await;
 }
 
-async fn tag_entry() {
-	todo!("do some useful work here")
+async fn tag_entry<'a>(path: Cow<'a, Path>) {
+	// TODO::perf don't await, just pipeline all the steps
+	// (reading file tags, network requests, writing tags)
+	let path = path.into_owned();
+	let tagged_file = task::spawn_blocking(move || handle_file_guessing(path)).await;
+	let network_req = todo!("add a network request here");
+	let tags_write_handle = todo!("add the ability to write tags here");
 }
 
 trait LyricsHolder {
