@@ -481,7 +481,7 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 [[package]]
 name = "wetutil"
 version = "0.1.0"
-source = "git+https://github.com/wetfloo/wetutil.git?rev=32e50f7722934124902130fa5c3f98b97880b969#32e50f7722934124902130fa5c3f98b97880b969"
+source = "git+https://github.com/wetfloo/wetutil.git?rev=ccdfb7598f26deef2a33a4bed192bcfbf3ff9172#ccdfb7598f26deef2a33a4bed192bcfbf3ff9172"
 
 [[package]]
 name = "winapi-util"
