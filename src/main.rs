@@ -127,11 +127,10 @@ where
 	for path in paths {
 		for entry_path in WalkDir::new(&path)
 			.into_iter()
-			.inspect_err(|err| {
+			.consume_err(|err| {
 				// TODO::logging
 				dbg!(err);
 			})
-			.discard_err()
 			.filter(|dir_entry| dir_entry.file_type().is_file())
 		{
 			// TODO::error_handling: remove unwrap,
@@ -175,11 +174,10 @@ fn traverse() {
 
 	for entry_path in WalkDir::new(&path)
 		.into_iter()
-		.inspect_err(|err| {
+		.consume_err(|err| {
 			// TODO::logging
 			dbg!(err);
 		})
-		.discard_err()
 		.filter(|dir_entry| dir_entry.file_type().is_file())
 		.map(|dir_entry| dir_entry.into_path())
 	{
