@@ -137,6 +137,6 @@ mod test {
 		let lyrics_fetcher = LyricsFetcherBuilder::new()
 			.add_service(Box::new(OkLyricsFetcher))
 			.build()
-			.unwrap();
+			.expect("we added a service, therefore, this value should always be present");
 	}
 }
