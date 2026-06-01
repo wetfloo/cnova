@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::PathBuf;
 use std::pin::Pin;
 
@@ -16,28 +17,51 @@ pub struct TaggedFileInfo {
 
 pub struct Lyrics(pub String);
 
-pub trait LyricsFetchService {
+pub trait LyricsFetchService: fmt::Debug {
 	fn request_lyrics(
 		&self,
 		data: &TagData,
 	) -> Pin<Box<dyn Future<Output = Result<Lyrics, LyricsFetchError>> + Send + Sync>>;
 }
 
+#[derive(Default, Debug)]
 pub struct LyricsFetcher {
 	services: Vec<Box<dyn LyricsFetchService>>,
 }
 
-impl LyricsFetcher {
-	pub fn new(services: Vec<Box<dyn LyricsFetchService>>) -> Self
-	{
+#[derive(Default, Debug)]
+pub struct LyricsFetcherBuilder {
+	fetcher: LyricsFetcher,
+}
+
+impl LyricsFetcherBuilder {
+	pub fn new() -> Self {
 		Self {
-			services: services
-				.into_iter()
-				.map(|v| v.into())
-				.collect(),
+			fetcher: LyricsFetcher {
+				services: Vec::new(),
+			},
 		}
 	}
 
+	pub fn add_service(mut self, service: Box<dyn LyricsFetchService>) -> Self {
+		self.fetcher.services.push(service);
+
+		self
+	}
+
+	/// Attempts to build [LyricsFetcher], returning [Some] on success,
+	/// and returning [None] if no services were provided
+	/// (using [add_service](Self::add_service))
+	pub fn build(self) -> Option<LyricsFetcher> {
+		if !self.fetcher.services.is_empty() {
+			Some(self.fetcher)
+		} else {
+			None
+		}
+	}
+}
+
+impl LyricsFetcher {
 	async fn request_lyrics(&self, data: &TagData) -> Result<Lyrics, Vec<LyricsFetchError>> {
 		let mut errors = Vec::with_capacity(0);
 
@@ -71,6 +95,7 @@ mod test {
 	use super::Lyrics;
 	use super::LyricsFetchError;
 	use super::LyricsFetchService;
+	use super::LyricsFetcherBuilder;
 	use super::TagData;
 	use super::TaggedFileInfo;
 
@@ -109,6 +134,9 @@ mod test {
 
 	#[tokio::test]
 	async fn test1() {
-		let lyrics_fetcher = LyricsFetcher::new(vec![Box::new(OkLyricsFetcher)]);
+		let lyrics_fetcher = LyricsFetcherBuilder::new()
+			.add_service(Box::new(OkLyricsFetcher))
+			.build()
+			.unwrap();
 	}
 }
