@@ -20,6 +20,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
 lofty = "0.24.0"
+rand = "0.9.4"
 sqlite = "0.37.0"
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["full"] }
