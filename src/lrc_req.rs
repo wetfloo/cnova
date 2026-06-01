@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::pin::Pin;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 // TODO::perf consider using string slice refs here to implement zero-copy
 pub struct TagData {
 	pub artist: String,
@@ -15,6 +15,7 @@ pub struct TaggedFileInfo {
 	pub path: PathBuf,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Lyrics(pub String);
 
 pub trait LyricsFetchService: fmt::Debug {
@@ -76,7 +77,7 @@ impl LyricsFetcher {
 	}
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum LyricsFetchError {
 	#[error("this track is instrumental and, therefore, there aren't any lyrics")]
 	Instrumental,
@@ -138,5 +139,21 @@ mod test {
 			.add_service(Box::new(OkLyricsFetcher))
 			.build()
 			.expect("we added a service, therefore, this value should always be present");
+		let tag_data = TagData {
+			artist: "Deftones".into(),
+			album: "Adrenaline".into(),
+			title: "Fireal".into(),
+		};
+
+		let res = lyrics_fetcher
+			.request_lyrics(&tag_data)
+			.await;
+
+		assert_eq!(
+			Ok(Lyrics(
+				"These are test lyrics for a song Fireal by Deftones.".into()
+			)),
+			res
+		);
 	}
 }
