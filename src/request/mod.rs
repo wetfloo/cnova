@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use lrclib::LrclibLyricsResponse;
 
-pub(crate) type LyricsRequestRes =
+pub(crate) type LyricsServiceRequestResult =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsFetchError>> + Send + Sync>>;
-pub(crate) type LyricsRes = Result<Lyrics, Vec<LyricsFetchError>>;
+pub(crate) type LyricsFetcherResult = Result<Lyrics, Vec<LyricsFetchError>>;
 
 pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
@@ -56,7 +56,7 @@ pub struct TagData {
 }
 
 pub trait LyricsFetchService: fmt::Debug {
-	fn request_lyrics(&self, data: &TagData) -> LyricsRequestRes;
+	fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult;
 }
 
 #[derive(Default, Debug)]
@@ -65,7 +65,7 @@ pub struct LyricsFetcher {
 }
 
 impl LyricsFetcher {
-	async fn request_lyrics(&self, data: &TagData) -> LyricsRes {
+	async fn request_lyrics(&self, data: &TagData) -> LyricsFetcherResult {
 		let mut errors = Vec::with_capacity(0);
 
 		for service in self.services.iter() {
@@ -114,14 +114,14 @@ mod test {
 	use super::LyricsFetchService;
 	use super::LyricsFetcher;
 	use super::LyricsFetcherBuilder;
-	use super::LyricsRequestRes;
+	use super::LyricsServiceRequestResult;
 	use super::TagData;
 
 	#[derive(Debug, Default)]
 	struct OkLyricsFetcher;
 
 	impl LyricsFetchService for OkLyricsFetcher {
-		fn request_lyrics(&self, data: &TagData) -> LyricsRequestRes {
+		fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult {
 			Box::pin(future::ready(Ok(Lyrics::Unsynced(
 				format!(
 					"These are test lyrics for a song {} by {}.",
@@ -135,7 +135,7 @@ mod test {
 	struct ErrInstrumentalLyricsFetcher;
 
 	impl LyricsFetchService for ErrInstrumentalLyricsFetcher {
-		fn request_lyrics(&self, data: &TagData) -> LyricsRequestRes {
+		fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult {
 			Box::pin(future::ready(Err(
 				LyricsFetchError::Unknown,
 			)))
