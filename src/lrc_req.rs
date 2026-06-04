@@ -127,7 +127,7 @@ mod test {
 	}
 
 	#[tokio::test]
-	async fn test1() {
+	async fn test_ok_only_service() {
 		let lyrics_fetcher = LyricsFetcherBuilder::new(Box::new(OkLyricsFetcher)).build();
 		let tag_data = TagData {
 			artist: "Deftones".into(),
