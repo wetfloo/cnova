@@ -82,8 +82,6 @@ pub struct FakeLyricsFetcher;
 
 #[cfg(test)]
 mod test {
-	use rand::RngCore;
-
 	use crate::lrc_req::LyricsFetcher;
 
 	use super::Lyrics;
