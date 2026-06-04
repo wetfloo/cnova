@@ -82,18 +82,16 @@ pub struct FakeLyricsFetcher;
 
 #[cfg(test)]
 mod test {
-	use crate::lrc_req::LyricsFetcher;
+	use std::future;
+	use std::pin::Pin;
 
 	use super::Lyrics;
 	use super::LyricsFetchError;
 	use super::LyricsFetchService;
+	use super::LyricsFetcher;
 	use super::LyricsFetcherBuilder;
 	use super::TagData;
 	use super::TaggedFileInfo;
-
-	use std::cell::RefCell;
-	use std::future;
-	use std::pin::Pin;
 
 	#[derive(Debug, Default)]
 	struct OkLyricsFetcher;
