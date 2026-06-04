@@ -36,10 +36,10 @@ pub struct LyricsFetcherBuilder {
 }
 
 impl LyricsFetcherBuilder {
-	pub fn new() -> Self {
+	pub fn new(service: Box<dyn LyricsFetchService>) -> Self {
 		Self {
 			fetcher: LyricsFetcher {
-				services: Vec::new(),
+				services: vec![service],
 			},
 		}
 	}
@@ -50,15 +50,8 @@ impl LyricsFetcherBuilder {
 		self
 	}
 
-	/// Attempts to build [LyricsFetcher], returning [Some] on success,
-	/// and returning [None] if no services were provided
-	/// (using [add_service](Self::add_service))
-	pub fn build(self) -> Option<LyricsFetcher> {
-		if !self.fetcher.services.is_empty() {
-			Some(self.fetcher)
-		} else {
-			None
-		}
+	pub fn build(self) -> LyricsFetcher {
+		self.fetcher
 	}
 }
 
@@ -135,10 +128,7 @@ mod test {
 
 	#[tokio::test]
 	async fn test1() {
-		let lyrics_fetcher = LyricsFetcherBuilder::new()
-			.add_service(Box::new(OkLyricsFetcher))
-			.build()
-			.expect("we added a service, therefore, this value should always be present");
+		let lyrics_fetcher = LyricsFetcherBuilder::new(Box::new(OkLyricsFetcher)).build();
 		let tag_data = TagData {
 			artist: "Deftones".into(),
 			album: "Adrenaline".into(),
