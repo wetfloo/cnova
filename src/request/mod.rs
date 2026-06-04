@@ -1,29 +1,18 @@
-use std::cmp;
+mod lrclib;
+
 use std::fmt;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+use lrclib::LrclibLyricsResponse;
 
 pub(crate) type LyricsRequestRes =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsFetchError>> + Send + Sync>>;
 pub(crate) type LyricsRes = Result<Lyrics, Vec<LyricsFetchError>>;
 
-#[derive(Debug, PartialEq)]
-// TODO::perf consider using string slice refs here to implement zero-copy
-pub struct TagData {
-	pub artist: String,
-	pub album: String,
-	pub title: String,
-	pub duration: Duration,
-}
-
-pub struct TaggedFileInfo {
-	pub file: lofty::file::TaggedFile,
-	pub path: PathBuf,
-}
+pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 #[derive(Debug, PartialEq)]
 pub enum Lyrics {
@@ -51,60 +40,43 @@ impl From<LrclibLyricsResponse> for Lyrics {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum LyricsFetchError {
+	#[error("unknown error")]
+	Unknown,
+}
+
+#[derive(Debug, PartialEq)]
+// TODO::perf consider using string slice refs here to implement zero-copy
+pub struct TagData {
+	pub artist: String,
+	pub album: String,
+	pub title: String,
+	pub duration: Duration,
+}
+
 pub trait LyricsFetchService: fmt::Debug {
 	fn request_lyrics(&self, data: &TagData) -> LyricsRequestRes;
-}
-
-#[derive(Debug)]
-pub struct LrclibLyricsFetchService;
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LrclibLyricsResponse {
-	id: u64,
-	track_name: String,
-	artist_name: String,
-	album_name: String,
-	/// Duration of a song in seconds.
-	duration: u64,
-	instrumental: bool,
-	plain_lyrics: String,
-	synced_lyrics: String,
-}
-
-impl LyricsFetchService for LrclibLyricsFetchService {
-	fn request_lyrics(&self, data: &TagData) -> LyricsRequestRes {
-		let mut url = reqwest::Url::parse_with_params(
-			"https://lrclib.net/api/get/",
-			[
-				("track_name", &data.title),
-				("artist_name", &data.artist),
-				("album_name", &data.album),
-			],
-		)
-		.expect(
-			"since we typed this url by hand without user input, we expect it to always parse correctly",
-		);
-		Box::pin(async {
-			let response: LrclibLyricsResponse = HTTP_CLIENT
-				.get(url)
-				.send()
-				.await
-				// TODO::error_handling: make a better user facing error when we're done here.
-				.map_err(|_| LyricsFetchError::Unknown)?
-				.json()
-				.await
-				// TODO::error_handling: make a better user facing error when we're done here.
-				.map_err(|_| LyricsFetchError::Unknown)?;
-
-			Ok(response.into())
-		})
-	}
 }
 
 #[derive(Default, Debug)]
 pub struct LyricsFetcher {
 	services: Vec<Box<dyn LyricsFetchService>>,
+}
+
+impl LyricsFetcher {
+	async fn request_lyrics(&self, data: &TagData) -> LyricsRes {
+		let mut errors = Vec::with_capacity(0);
+
+		for service in self.services.iter() {
+			match service.request_lyrics(data).await {
+				Ok(v) => return Ok(v),
+				Err(e) => errors.push(e),
+			}
+		}
+
+		Err(errors)
+	}
 }
 
 #[derive(Default, Debug)]
@@ -132,29 +104,6 @@ impl LyricsFetcherBuilder {
 	}
 }
 
-impl LyricsFetcher {
-	async fn request_lyrics(&self, data: &TagData) -> LyricsRes {
-		let mut errors = Vec::with_capacity(0);
-
-		for service in self.services.iter() {
-			match service.request_lyrics(data).await {
-				Ok(v) => return Ok(v),
-				Err(e) => errors.push(e),
-			}
-		}
-
-		Err(errors)
-	}
-}
-
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum LyricsFetchError {
-	#[error("unknown error")]
-	Unknown,
-}
-
-pub struct FakeLyricsFetcher;
-
 #[cfg(test)]
 mod test {
 	use std::future;
@@ -167,7 +116,6 @@ mod test {
 	use super::LyricsFetcherBuilder;
 	use super::LyricsRequestRes;
 	use super::TagData;
-	use super::TaggedFileInfo;
 
 	#[derive(Debug, Default)]
 	struct OkLyricsFetcher;
