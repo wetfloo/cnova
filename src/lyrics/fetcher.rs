@@ -2,17 +2,24 @@ use std::fmt;
 
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
-use crate::lyrics::service::LyricsFetchService;
+use crate::lyrics::service;
 use crate::lyrics::service::LyricsServiceError;
 
-pub(crate) type LyricsFetcherResult = Result<Lyrics, Vec<LyricsServiceError>>;
+pub type LyricsFetcherResult = Result<Lyrics, Vec<LyricsServiceError>>;
+pub type LyricsFetchService = Box<dyn service::LyricsFetchService>;
 
 #[derive(Default, Debug)]
 pub struct LyricsFetcher {
-	services: Vec<Box<dyn LyricsFetchService>>,
+	services: Vec<LyricsFetchService>,
 }
 
 impl LyricsFetcher {
+	/// For any service added via
+	/// [LyricsFetcherBuilder::add_service] or [LyricsFetcherBuilder::new],
+	/// it will be polled one by one, until one returns successfully,
+	/// then its value will be returned.
+	/// Any remaining errors will be returned in [Err],
+	/// and any other services that could do work would be ignored.
 	pub async fn request_lyrics(&self, data: &TagData) -> LyricsFetcherResult {
 		let mut errors = Vec::with_capacity(0);
 
@@ -25,6 +32,12 @@ impl LyricsFetcher {
 
 		Err(errors)
 	}
+
+	/// Creates a new [LyricsFetcherBuilder] to make [LyricsFetcher].
+	/// See [LyricsFetcherBuilder::new] for details.
+	pub fn builder(service: LyricsFetchService) -> LyricsFetcherBuilder {
+		LyricsFetcherBuilder::new(service)
+	}
 }
 
 #[derive(Default, Debug)]
@@ -33,7 +46,9 @@ pub struct LyricsFetcherBuilder {
 }
 
 impl LyricsFetcherBuilder {
-	pub fn new(service: Box<dyn LyricsFetchService>) -> Self {
+	/// Creates a new builder, accepting an instance of [LyricsFetchService],
+	/// accepting additional instances via [add_service](LyricsFetcherBuilder::add_service).
+	pub fn new(service: LyricsFetchService) -> Self {
 		Self {
 			fetcher: LyricsFetcher {
 				services: vec![service],
@@ -41,7 +56,7 @@ impl LyricsFetcherBuilder {
 		}
 	}
 
-	pub fn add_service(mut self, service: Box<dyn LyricsFetchService>) -> Self {
+	pub fn add_service(mut self, service: LyricsFetchService) -> Self {
 		self.fetcher.services.push(service);
 
 		self
