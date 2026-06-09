@@ -1,3 +1,4 @@
+mod fetcher;
 mod service;
 
 use service::lrclib::LrclibLyricsResponse;
@@ -35,55 +36,6 @@ pub struct TagData {
 	pub duration: Duration,
 }
 
-pub trait LyricsFetchService: fmt::Debug {
-	fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult;
-}
-
-#[derive(Default, Debug)]
-pub struct LyricsFetcher {
-	services: Vec<Box<dyn LyricsFetchService>>,
-}
-
-impl LyricsFetcher {
-	async fn request_lyrics(&self, data: &TagData) -> LyricsFetcherResult {
-		let mut errors = Vec::with_capacity(0);
-
-		for service in self.services.iter() {
-			match service.request_lyrics(data).await {
-				Ok(v) => return Ok(v),
-				Err(e) => errors.push(e),
-			}
-		}
-
-		Err(errors)
-	}
-}
-
-#[derive(Default, Debug)]
-pub struct LyricsFetcherBuilder {
-	fetcher: LyricsFetcher,
-}
-
-impl LyricsFetcherBuilder {
-	pub fn new(service: Box<dyn LyricsFetchService>) -> Self {
-		Self {
-			fetcher: LyricsFetcher {
-				services: vec![service],
-			},
-		}
-	}
-
-	pub fn add_service(mut self, service: Box<dyn LyricsFetchService>) -> Self {
-		self.fetcher.services.push(service);
-
-		self
-	}
-
-	pub fn build(self) -> LyricsFetcher {
-		self.fetcher
-	}
-}
-
 #[cfg(test)]
 mod test {
 	use std::future;
@@ -91,11 +43,11 @@ mod test {
 
 	use super::Lyrics;
 	use super::LyricsFetchError;
-	use super::LyricsFetchService;
-	use super::LyricsFetcher;
-	use super::LyricsFetcherBuilder;
 	use super::LyricsServiceRequestResult;
 	use super::TagData;
+	use crate::lyrics::fetcher::LyricsFetcher;
+	use crate::lyrics::fetcher::LyricsFetcherBuilder;
+	use crate::lyrics::service::LyricsFetchService;
 
 	#[derive(Debug, Default)]
 	struct OkLyricsFetcher;
