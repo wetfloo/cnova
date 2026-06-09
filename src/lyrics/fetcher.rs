@@ -6,7 +6,7 @@ use crate::lyrics::service;
 use crate::lyrics::service::LyricsServiceError;
 
 pub type LyricsFetcherResult = Result<Lyrics, Vec<LyricsServiceError>>;
-pub type LyricsFetchService = Box<dyn service::LyricsFetchService>;
+type LyricsFetchService = Box<dyn service::LyricsFetchService>;
 
 #[derive(Default, Debug)]
 pub struct LyricsFetcher {
