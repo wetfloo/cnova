@@ -7,17 +7,17 @@ use std::fmt;
 use std::pin::Pin;
 use std::sync::LazyLock;
 
-pub(crate) type LyricsServiceRequestResult =
-	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsFetchError>> + Send + Sync>>;
+pub(crate) type LyricsServiceResult =
+	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceError>> + Send + Sync>>;
 
 pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 pub trait LyricsFetchService: fmt::Debug {
-	fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult;
+	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult;
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum LyricsFetchError {
+pub enum LyricsServiceError {
 	#[error("unknown error")]
 	Unknown,
 }

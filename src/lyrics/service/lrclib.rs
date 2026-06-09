@@ -1,9 +1,9 @@
-use super::{HTTP_CLIENT, LyricsFetchError};
+use super::{HTTP_CLIENT, LyricsServiceError};
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
 use crate::lyrics::service;
 use crate::lyrics::service::LyricsFetchService;
-use crate::lyrics::service::LyricsServiceRequestResult;
+use crate::lyrics::service::LyricsServiceResult;
 
 #[derive(Debug)]
 pub struct LrclibLyricsFetchService;
@@ -23,7 +23,7 @@ pub struct LrclibLyricsResponse {
 }
 
 impl LyricsFetchService for LrclibLyricsFetchService {
-	fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult {
+	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
 		let mut url = reqwest::Url::parse_with_params(
 			"https://lrclib.net/api/get/",
 			[
@@ -45,11 +45,11 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 				.send()
 				.await
 				// TODO::error_handling: make a better user facing error when we're done here.
-				.map_err(|_| LyricsFetchError::Unknown)?
+				.map_err(|_| LyricsServiceError::Unknown)?
 				.json()
 				.await
 				// TODO::error_handling: make a better user facing error when we're done here.
-				.map_err(|_| LyricsFetchError::Unknown)?;
+				.map_err(|_| LyricsServiceError::Unknown)?;
 
 			Ok(response.into())
 		})

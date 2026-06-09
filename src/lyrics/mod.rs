@@ -33,15 +33,15 @@ mod test {
 	use super::TagData;
 	use crate::lyrics::fetcher::LyricsFetcher;
 	use crate::lyrics::fetcher::LyricsFetcherBuilder;
-	use crate::lyrics::service::LyricsFetchError;
 	use crate::lyrics::service::LyricsFetchService;
-	use crate::lyrics::service::LyricsServiceRequestResult;
+	use crate::lyrics::service::LyricsServiceError;
+	use crate::lyrics::service::LyricsServiceResult;
 
 	#[derive(Debug, Default)]
 	struct OkLyricsFetcher;
 
 	impl LyricsFetchService for OkLyricsFetcher {
-		fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult {
+		fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
 			Box::pin(future::ready(Ok(Lyrics::Unsynced(
 				format!(
 					"These are test lyrics for a song {} by {}.",
@@ -55,9 +55,9 @@ mod test {
 	struct ErrInstrumentalLyricsFetcher;
 
 	impl LyricsFetchService for ErrInstrumentalLyricsFetcher {
-		fn request_lyrics(&self, data: &TagData) -> LyricsServiceRequestResult {
+		fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
 			Box::pin(future::ready(Err(
-				LyricsFetchError::Unknown,
+				LyricsServiceError::Unknown,
 			)))
 		}
 	}

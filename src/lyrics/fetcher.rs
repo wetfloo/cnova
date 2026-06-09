@@ -2,10 +2,10 @@ use std::fmt;
 
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
-use crate::lyrics::service::LyricsFetchError;
 use crate::lyrics::service::LyricsFetchService;
+use crate::lyrics::service::LyricsServiceError;
 
-pub(crate) type LyricsFetcherResult = Result<Lyrics, Vec<LyricsFetchError>>;
+pub(crate) type LyricsFetcherResult = Result<Lyrics, Vec<LyricsServiceError>>;
 
 #[derive(Default, Debug)]
 pub struct LyricsFetcher {
