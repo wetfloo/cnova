@@ -1,8 +1,9 @@
-use super::HTTP_CLIENT;
-use super::LyricsFetchError;
-use super::LyricsFetchService;
-use super::LyricsServiceRequestResult;
-use super::TagData;
+use crate::lyrics::HTTP_CLIENT;
+use crate::lyrics::LyricsFetchError;
+use crate::lyrics::LyricsFetchService;
+use crate::lyrics::LyricsServiceRequestResult;
+use crate::lyrics::TagData;
+use crate::lyrics::service;
 
 #[derive(Debug)]
 pub struct LrclibLyricsFetchService;
@@ -10,15 +11,15 @@ pub struct LrclibLyricsFetchService;
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LrclibLyricsResponse {
-	pub(super) id: u64,
-	pub(super) track_name: String,
-	pub(super) artist_name: String,
-	pub(super) album_name: String,
+	pub(crate) id: u64,
+	pub(crate) track_name: String,
+	pub(crate) artist_name: String,
+	pub(crate) album_name: String,
 	/// Duration of a song in seconds.
-	pub(super) duration: u64,
-	pub(super) instrumental: bool,
-	pub(super) plain_lyrics: String,
-	pub(super) synced_lyrics: String,
+	pub(crate) duration: u64,
+	pub(crate) instrumental: bool,
+	pub(crate) plain_lyrics: String,
+	pub(crate) synced_lyrics: String,
 }
 
 impl LyricsFetchService for LrclibLyricsFetchService {

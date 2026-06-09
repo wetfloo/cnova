@@ -1,12 +1,11 @@
-mod lrclib;
+mod service;
 
+use service::lrclib::LrclibLyricsResponse;
 use std::fmt;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::LazyLock;
 use std::time::Duration;
-
-use lrclib::LrclibLyricsResponse;
 
 pub(crate) type LyricsServiceRequestResult =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsFetchError>> + Send + Sync>>;
