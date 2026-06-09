@@ -7,7 +7,7 @@ use std::fmt;
 use std::pin::Pin;
 use std::sync::LazyLock;
 
-pub(crate) type LyricsServiceResult =
+pub type LyricsServiceResult =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceError>> + Send + Sync>>;
 
 pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);

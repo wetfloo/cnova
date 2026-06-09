@@ -1,7 +1,6 @@
 mod fetcher;
 mod service;
 
-use service::lrclib::LrclibLyricsResponse;
 use std::fmt;
 use std::path::PathBuf;
 use std::pin::Pin;

@@ -10,16 +10,16 @@ pub struct LrclibLyricsFetchService;
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LrclibLyricsResponse {
-	pub(crate) id: u64,
-	pub(crate) track_name: String,
-	pub(crate) artist_name: String,
-	pub(crate) album_name: String,
+struct LrclibLyricsResponse {
+	id: u64,
+	track_name: String,
+	artist_name: String,
+	album_name: String,
 	/// Duration of a song in seconds.
 	pub(crate) duration: u64,
-	pub(crate) instrumental: bool,
-	pub(crate) plain_lyrics: String,
-	pub(crate) synced_lyrics: String,
+	instrumental: bool,
+	plain_lyrics: String,
+	synced_lyrics: String,
 }
 
 impl LyricsFetchService for LrclibLyricsFetchService {
