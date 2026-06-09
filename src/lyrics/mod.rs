@@ -8,23 +8,11 @@ use std::pin::Pin;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-pub(crate) type LyricsServiceRequestResult =
-	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsFetchError>> + Send + Sync>>;
-pub(crate) type LyricsFetcherResult = Result<Lyrics, Vec<LyricsFetchError>>;
-
-pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
-
 #[derive(Debug, PartialEq)]
 pub enum Lyrics {
 	Synced(String),
 	Unsynced(String),
 	Instrumental,
-}
-
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum LyricsFetchError {
-	#[error("unknown error")]
-	Unknown,
 }
 
 #[derive(Debug, PartialEq)]
@@ -42,12 +30,12 @@ mod test {
 	use std::time::Duration;
 
 	use super::Lyrics;
-	use super::LyricsFetchError;
-	use super::LyricsServiceRequestResult;
 	use super::TagData;
 	use crate::lyrics::fetcher::LyricsFetcher;
 	use crate::lyrics::fetcher::LyricsFetcherBuilder;
+	use crate::lyrics::service::LyricsFetchError;
 	use crate::lyrics::service::LyricsFetchService;
+	use crate::lyrics::service::LyricsServiceRequestResult;
 
 	#[derive(Debug, Default)]
 	struct OkLyricsFetcher;

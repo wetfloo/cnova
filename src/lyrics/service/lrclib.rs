@@ -1,10 +1,9 @@
-use crate::lyrics::HTTP_CLIENT;
+use super::{HTTP_CLIENT, LyricsFetchError};
 use crate::lyrics::Lyrics;
-use crate::lyrics::LyricsFetchError;
-use crate::lyrics::LyricsServiceRequestResult;
 use crate::lyrics::TagData;
 use crate::lyrics::service;
 use crate::lyrics::service::LyricsFetchService;
+use crate::lyrics::service::LyricsServiceRequestResult;
 
 #[derive(Debug)]
 pub struct LrclibLyricsFetchService;
