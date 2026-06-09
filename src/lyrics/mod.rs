@@ -20,25 +20,6 @@ pub enum Lyrics {
 	Instrumental,
 }
 
-impl From<LrclibLyricsResponse> for Lyrics {
-	fn from(value: LrclibLyricsResponse) -> Self {
-		if value.instrumental {
-			return Self::Instrumental;
-		}
-
-		let LrclibLyricsResponse {
-			synced_lyrics,
-			plain_lyrics,
-			..
-		} = value;
-		if !synced_lyrics.trim().is_empty() {
-			Self::Synced(synced_lyrics)
-		} else {
-			Self::Unsynced(plain_lyrics)
-		}
-	}
-}
-
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum LyricsFetchError {
 	#[error("unknown error")]

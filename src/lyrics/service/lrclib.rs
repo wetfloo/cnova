@@ -1,4 +1,5 @@
 use crate::lyrics::HTTP_CLIENT;
+use crate::lyrics::Lyrics;
 use crate::lyrics::LyricsFetchError;
 use crate::lyrics::LyricsFetchService;
 use crate::lyrics::LyricsServiceRequestResult;
@@ -53,5 +54,24 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 
 			Ok(response.into())
 		})
+	}
+}
+
+impl From<LrclibLyricsResponse> for Lyrics {
+	fn from(value: LrclibLyricsResponse) -> Self {
+		if value.instrumental {
+			return Self::Instrumental;
+		}
+
+		let LrclibLyricsResponse {
+			synced_lyrics,
+			plain_lyrics,
+			..
+		} = value;
+		if !synced_lyrics.trim().is_empty() {
+			Self::Synced(synced_lyrics)
+		} else {
+			Self::Unsynced(plain_lyrics)
+		}
 	}
 }
