@@ -1,7 +1,7 @@
 // TODO: remove when we're done.
 #![allow(unused)]
 
-mod request;
+mod lyrics;
 
 use std::borrow::Cow;
 use std::error::Error;
