@@ -29,6 +29,10 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 				("track_name", &data.title),
 				("artist_name", &data.artist),
 				("album_name", &data.album),
+				(
+					"duration",
+					&data.duration.as_secs().to_string(),
+				),
 			],
 		)
 		.expect(
