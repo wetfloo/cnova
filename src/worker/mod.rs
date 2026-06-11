@@ -17,14 +17,15 @@ use tokio::task::JoinSet;
 use walkdir::WalkDir;
 use wetutil::prelude::*;
 
+use crate::lyrics::Lyrics;
 use crate::worker::tag_types::TagTypesToWriteExt as _;
 
 type StdFile = std::fs::File;
 type TaggedFile = lofty::file::BoundTaggedFile<StdFile>;
 
 type ChanUntagged = walkdir::DirEntry;
-type ChanTagged = (TaggedFile, PathBuf);
-type ChanTaggedWithLyrics = (String, TaggedFile, PathBuf);
+type ChanTagged = TaggedFile;
+type ChanTaggedWithLyrics = (Lyrics, TaggedFile);
 
 pub(super) trait UnboundedTx {
 	type Item;
@@ -104,7 +105,7 @@ where
 					.and_then(handle_file_guessing)
 				{
 					Ok(tagged_file) => {
-						tagged_tx.send((tagged_file, path));
+						tagged_tx.send(tagged_file);
 					},
 					Err(guess_err) => {
 						// TODO::logging
@@ -120,15 +121,14 @@ where
 	// Step 3: use file tags to request lyrics
 	join_set.spawn(async move {
 		let mut networking_worker_handles = JoinSet::new();
-		while let Some((tagged_file, path)) = tagged_rx.recv().await {
+		while let Some(tagged_file) = tagged_rx.recv().await {
 			let lrc_tx = lrc_tx.clone();
 			networking_worker_handles.spawn(async move {
 				// TODO: some networking here.
 				// TODO: better lyrics type here than a plain `String`.
 				lrc_tx.send((
-					"some lyrics here".to_owned(),
+					Lyrics::Unsynced("some lyrics here".into()),
 					tagged_file,
-					path,
 				));
 			});
 		}
@@ -141,7 +141,7 @@ where
 	// Step 4: write lyrics tags back to files.
 	join_set.spawn(async move {
 		let mut writing_worker_handles = JoinSet::new();
-		while let Some((lyrics, tagged_file, path)) = lrc_rx.recv().await {
+		while let Some((lyrics, tagged_file)) = lrc_rx.recv().await {
 			writing_worker_handles.spawn_blocking(|| {
 				// TODO: write tags back to files.
 			});
