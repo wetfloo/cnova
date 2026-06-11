@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs::OpenOptions;
 use std::path::Path;
+use std::path::PathBuf;
 
 use lofty::error::LoftyError;
 use lofty::file::AudioFile as _;
@@ -15,6 +16,10 @@ use walkdir::WalkDir;
 use wetutil::prelude::*;
 
 use crate::worker::tag_types::TagTypesToWriteExt as _;
+
+type Untagged = walkdir::DirEntry;
+type Tagged = (lofty::file::TaggedFile, PathBuf);
+type TaggedWithLyrics = (String, lofty::file::TaggedFile, PathBuf);
 
 pub trait UnboundedTx {
 	type Item;
@@ -57,14 +62,14 @@ pub enum GuessFileError {
 	Io(#[from] std::io::Error),
 }
 
-pub async fn do_work<I, P>(paths: I)
+pub async fn lurk_and_tag<I, P>(paths: I)
 where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
 {
-	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel();
-	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel();
-	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel();
+	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel::<Untagged>();
+	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<Tagged>();
+	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<TaggedWithLyrics>();
 
 	let mut join_set = JoinSet::new();
 
@@ -72,7 +77,7 @@ where
 	//
 	// Walk the file structure in a separate task,
 	// without blocking tokio's executors for async tasks.
-	join_set.spawn_blocking(move || traverse_v2(&untagged_tx, paths));
+	join_set.spawn_blocking(move || traverse(&untagged_tx, paths));
 
 	// Step 2: read file tags, when possible.
 	join_set.spawn(async move {
@@ -163,7 +168,7 @@ where
 	Ok(())
 }
 
-pub(super) fn handle_file_guessing<P>(path: P) -> Result<lofty::file::TaggedFile, GuessFileError>
+fn handle_file_guessing<P>(path: P) -> Result<lofty::file::TaggedFile, GuessFileError>
 where
 	P: AsRef<Path>,
 {
@@ -185,7 +190,7 @@ where
 
 /// Traverse `paths` recursively,
 /// sending any file (not a directory!) to `tx`.
-pub fn traverse_v2<TX, I, P>(tx: &TX, paths: I)
+pub fn traverse<TX, I, P>(tx: &TX, paths: I)
 where
 	TX: UnboundedTx<Item = walkdir::DirEntry>,
 	I: IntoIterator<Item = P>,

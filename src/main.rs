@@ -32,5 +32,5 @@ async fn main() {
 
 	paths.push(path);
 
-	worker::do_work(paths);
+	worker::lurk_and_tag(paths);
 }
