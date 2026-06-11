@@ -3,26 +3,12 @@
 
 mod lyrics;
 
-use std::borrow::Cow;
 use std::env::home_dir;
 use std::error::Error;
 use std::fmt;
-use std::fs::File;
-use std::fs::FileType;
 use std::fs::OpenOptions;
 use std::io;
-use std::io::BufReader;
-use std::io::Read;
-use std::iter::Inspect;
 use std::path::Path;
-use std::path::PathBuf;
-use std::sync::LazyLock;
-use std::sync::Mutex;
-use std::sync::mpsc::Receiver as StdUnboundedRx;
-use std::sync::mpsc::Sender as StdUnboundedTx;
-use std::sync::mpsc::channel as std_unbounded_channel;
-use std::thread;
-use std::time::Duration;
 
 use lofty::error::LoftyError;
 use lofty::file::AudioFile as _;
@@ -30,15 +16,9 @@ use lofty::file::FileType as LoftyFileType;
 use lofty::file::TaggedFile as LoftyTaggedFile;
 use lofty::file::TaggedFileExt as _;
 use lofty::probe::Probe as LoftyProbe;
-use lofty::tag;
 use lofty::tag::ItemKey as LoftyItemKey;
-use lofty::tag::Tag as LoftyTag;
 use lofty::tag::TagType as LoftyTagType;
-use sqlite::ffi::sqlite3_stmt_status;
-use tokio::sync::mpsc::UnboundedReceiver as TokioUnboundedRx;
-use tokio::sync::mpsc::UnboundedSender as TokioUnboundedTx;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
-use tokio::task;
 use tokio::task::JoinSet;
 use walkdir::WalkDir;
 use wetutil::prelude::*;
@@ -145,34 +125,6 @@ where
 		}
 	}
 }
-
-trait LyricsHolder {
-	fn lyrics(metadata: &Metadata) -> Option<Lyrics>;
-}
-
-trait LyricsResolver {
-	async fn resolve_lyrics(metadata: &Metadata) -> Result<Lyrics, LyricsResolveError>;
-}
-
-struct Metadata {
-	title: Option<String>,
-	artist: Option<String>,
-	album_artist: Option<String>,
-	album: Option<String>,
-	duration: Duration,
-}
-
-struct Lyrics {
-	kind: LyricsKind,
-	data: String,
-}
-
-enum LyricsKind {
-	Synced,
-	Unsynced,
-}
-
-struct LyricsResolveError;
 
 fn traverse() {
 	let mut path = home_dir().unwrap();

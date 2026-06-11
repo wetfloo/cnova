@@ -1,10 +1,6 @@
 mod fetcher;
 mod service;
 
-use std::fmt;
-use std::path::PathBuf;
-use std::pin::Pin;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 #[derive(Debug, PartialEq)]
@@ -31,7 +27,6 @@ mod test {
 
 	use super::Lyrics;
 	use super::TagData;
-	use crate::lyrics::fetcher::LyricsFetcher;
 	use crate::lyrics::fetcher::LyricsFetcherBuilder;
 	use crate::lyrics::service::LyricsFetchService;
 	use crate::lyrics::service::LyricsServiceError;

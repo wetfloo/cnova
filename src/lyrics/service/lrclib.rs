@@ -2,7 +2,6 @@ use super::HTTP_CLIENT;
 use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
-use crate::lyrics::service;
 use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceResult;
 
@@ -25,7 +24,7 @@ struct LrclibLyricsResponse {
 
 impl LyricsFetchService for LrclibLyricsFetchService {
 	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
-		let mut url = reqwest::Url::parse_with_params(
+		let url = reqwest::Url::parse_with_params(
 			"https://lrclib.net/api/get/",
 			[
 				("track_name", &data.title),

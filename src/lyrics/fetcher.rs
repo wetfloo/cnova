@@ -1,5 +1,3 @@
-use std::fmt;
-
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
 use crate::lyrics::service;
