@@ -31,4 +31,6 @@ async fn main() {
 	path.push("Music/Experiment");
 
 	paths.push(path);
+
+	worker::do_work(paths);
 }

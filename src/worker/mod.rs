@@ -58,7 +58,7 @@ pub enum GuessFileError {
 
 pub async fn do_work<I, P>(paths: I)
 where
-	I: IntoIterator<Item = P> + Send,
+	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
 {
 	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel();
