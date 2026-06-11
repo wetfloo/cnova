@@ -1,4 +1,5 @@
-use super::{HTTP_CLIENT, LyricsServiceError};
+use super::HTTP_CLIENT;
+use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
 use crate::lyrics::service;

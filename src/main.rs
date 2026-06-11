@@ -4,6 +4,7 @@
 mod lyrics;
 
 use std::borrow::Cow;
+use std::env::home_dir;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -15,21 +16,24 @@ use std::io::Read;
 use std::iter::Inspect;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::mpsc::Receiver as StdUnboundedRx;
 use std::sync::mpsc::Sender as StdUnboundedTx;
 use std::sync::mpsc::channel as std_unbounded_channel;
 use std::thread;
 use std::time::Duration;
-use std::{env::home_dir, sync::LazyLock};
 
 use lofty::error::LoftyError;
-use lofty::file::{AudioFile as _, TaggedFileExt as _};
-use lofty::file::{FileType as LoftyFileType, TaggedFile as LoftyTaggedFile};
+use lofty::file::AudioFile as _;
+use lofty::file::FileType as LoftyFileType;
+use lofty::file::TaggedFile as LoftyTaggedFile;
+use lofty::file::TaggedFileExt as _;
 use lofty::probe::Probe as LoftyProbe;
 use lofty::tag;
 use lofty::tag::ItemKey as LoftyItemKey;
-use lofty::tag::{Tag as LoftyTag, TagType as LoftyTagType};
+use lofty::tag::Tag as LoftyTag;
+use lofty::tag::TagType as LoftyTagType;
 use sqlite::ffi::sqlite3_stmt_status;
 use tokio::sync::mpsc::UnboundedReceiver as TokioUnboundedRx;
 use tokio::sync::mpsc::UnboundedSender as TokioUnboundedTx;
