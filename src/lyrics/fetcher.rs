@@ -13,10 +13,10 @@ pub struct LyricsFetcher {
 
 impl LyricsFetcher {
 	/// For any service added via
-	/// [LyricsFetcherBuilder::add_service] or [LyricsFetcherBuilder::new],
+	/// [`LyricsFetcherBuilder::add_service`] or [`LyricsFetcherBuilder::new`],
 	/// it will be polled one by one, until one returns successfully,
 	/// then its value will be returned.
-	/// Any remaining errors will be returned in [Err],
+	/// Any remaining errors will be returned in [`Err`],
 	/// and any other services that could do work would be ignored.
 	pub async fn request_lyrics(&self, data: &TagData) -> LyricsFetcherResult {
 		let mut errors = Vec::with_capacity(0);
@@ -31,7 +31,7 @@ impl LyricsFetcher {
 		Err(errors)
 	}
 
-	/// Creates a new [LyricsFetcherBuilder] to make [LyricsFetcher].
+	/// Creates a new [`LyricsFetcherBuilder`] to make [`LyricsFetcher`].
 	/// See [LyricsFetcherBuilder::new] for details.
 	pub fn builder(service: LyricsFetchService) -> LyricsFetcherBuilder {
 		LyricsFetcherBuilder::new(service)
@@ -44,8 +44,8 @@ pub struct LyricsFetcherBuilder {
 }
 
 impl LyricsFetcherBuilder {
-	/// Creates a new builder, accepting an instance of [LyricsFetchService],
-	/// accepting additional instances via [add_service](LyricsFetcherBuilder::add_service).
+	/// Creates a new builder, accepting an instance of [`LyricsFetchService`],
+	/// accepting additional instances via [`add_service`](LyricsFetcherBuilder::add_service).
 	pub fn new(service: LyricsFetchService) -> Self {
 		Self {
 			fetcher: LyricsFetcher {
