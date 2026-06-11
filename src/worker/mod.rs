@@ -192,7 +192,7 @@ where
 /// sending any file (not a directory!) to `tx`.
 pub fn traverse<TX, I, P>(tx: &TX, paths: I)
 where
-	TX: UnboundedTx<Item = walkdir::DirEntry>,
+	TX: UnboundedTx<Item = Untagged>,
 	I: IntoIterator<Item = P>,
 	P: AsRef<Path>,
 {
