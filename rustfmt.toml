@@ -14,3 +14,5 @@ chain_width = 40
 fn_call_width = 40
 struct_lit_width = 15
 struct_variant_width = 15
+
+imports_granularity = "module"
