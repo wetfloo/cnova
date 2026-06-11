@@ -1,6 +1,7 @@
 edition = "2024"
 
 hard_tabs = true
+tab_spaces = 4
 newline_style = "Unix"
 
 match_block_trailing_comma = true
