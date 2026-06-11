@@ -1886,9 +1886,9 @@ dependencies = [
 
 [[package]]
 name = "wetutil"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "108882571eccf74fe958771134d332255b9265090cbb4b10df22ae6777a1fc90"
+checksum = "360033cf8d5013a51707a2f8f0ab760af5faf56678d0db55a08189134aad19bb"
 
 [[package]]
 name = "winapi-util"
