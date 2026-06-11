@@ -16,7 +16,7 @@ pub trait LyricsFetchService: fmt::Debug {
 	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult;
 }
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum LyricsServiceError {
 	#[error("unknown error")]
 	Unknown,

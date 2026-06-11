@@ -25,6 +25,7 @@ pub struct TagData {
 
 #[cfg(test)]
 mod test {
+	use std::assert_matches;
 	use std::future;
 	use std::time::Duration;
 
@@ -75,9 +76,9 @@ mod test {
 			.request_lyrics(&tag_data)
 			.await;
 
-		assert_eq!(
-			Ok(Lyrics::Unsynced(
-				"These are test lyrics for a song Fireal by Deftones.".into()
+		assert_matches!(
+			Ok::<_, LyricsServiceError>(Lyrics::Unsynced(
+				"These are test lyrics for a song Fireal by Deftones.".to_owned()
 			)),
 			res
 		);
