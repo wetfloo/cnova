@@ -4,7 +4,7 @@ mod service;
 use std::time::Duration;
 
 #[derive(Debug, PartialEq)]
-pub enum Lyrics {
+pub(crate) enum Lyrics {
 	Synced(String),
 	Unsynced(String),
 	Instrumental,
@@ -12,7 +12,7 @@ pub enum Lyrics {
 
 #[derive(Debug, PartialEq)]
 // TODO::perf consider using string slice refs here to implement zero-copy
-pub struct TagData {
+pub(crate) struct TagData {
 	pub artist: String,
 	pub album: String,
 	pub title: String,

@@ -3,11 +3,11 @@ use crate::lyrics::TagData;
 use crate::lyrics::service;
 use crate::lyrics::service::LyricsServiceError;
 
-pub type LyricsFetcherResult = Result<Lyrics, Vec<LyricsServiceError>>;
+pub(super) type LyricsFetcherResult = Result<Lyrics, Vec<LyricsServiceError>>;
 type LyricsFetchService = Box<dyn service::LyricsFetchService>;
 
 #[derive(Default, Debug)]
-pub struct LyricsFetcher {
+pub(super) struct LyricsFetcher {
 	services: Vec<LyricsFetchService>,
 }
 
@@ -18,7 +18,7 @@ impl LyricsFetcher {
 	/// then its value will be returned.
 	/// Any remaining errors will be returned in [`Err`],
 	/// and any other services that could do work would be ignored.
-	pub async fn request_lyrics(&self, data: &TagData) -> LyricsFetcherResult {
+	pub(super) async fn request_lyrics(&self, data: &TagData) -> LyricsFetcherResult {
 		let mut errors = Vec::with_capacity(0);
 
 		for service in self.services.iter() {
@@ -33,20 +33,20 @@ impl LyricsFetcher {
 
 	/// Creates a new [`LyricsFetcherBuilder`] to make [`LyricsFetcher`].
 	/// See [LyricsFetcherBuilder::new] for details.
-	pub fn builder(service: LyricsFetchService) -> LyricsFetcherBuilder {
+	pub(super) fn builder(service: LyricsFetchService) -> LyricsFetcherBuilder {
 		LyricsFetcherBuilder::new(service)
 	}
 }
 
 #[derive(Default, Debug)]
-pub struct LyricsFetcherBuilder {
+pub(super) struct LyricsFetcherBuilder {
 	fetcher: LyricsFetcher,
 }
 
 impl LyricsFetcherBuilder {
 	/// Creates a new builder, accepting an instance of [`LyricsFetchService`],
 	/// accepting additional instances via [`add_service`](LyricsFetcherBuilder::add_service).
-	pub fn new(service: LyricsFetchService) -> Self {
+	pub(super) fn new(service: LyricsFetchService) -> Self {
 		Self {
 			fetcher: LyricsFetcher {
 				services: vec![service],
@@ -54,13 +54,13 @@ impl LyricsFetcherBuilder {
 		}
 	}
 
-	pub fn add_service(mut self, service: LyricsFetchService) -> Self {
+	pub(super) fn add_service(mut self, service: LyricsFetchService) -> Self {
 		self.fetcher.services.push(service);
 
 		self
 	}
 
-	pub fn build(self) -> LyricsFetcher {
+	pub(super) fn build(self) -> LyricsFetcher {
 		self.fetcher
 	}
 }

@@ -26,7 +26,7 @@ type ChanUntagged = walkdir::DirEntry;
 type ChanTagged = (TaggedFile, PathBuf);
 type ChanTaggedWithLyrics = (String, TaggedFile, PathBuf);
 
-pub trait UnboundedTx {
+pub(super) trait UnboundedTx {
 	type Item;
 	type Err: SendError<Self::Item>;
 
@@ -51,14 +51,14 @@ impl<T> UnboundedTx for std::sync::mpsc::Sender<T> {
 	}
 }
 
-pub trait SendError<T>: fmt::Debug + fmt::Display + Error {}
+pub(super) trait SendError<T>: fmt::Debug + fmt::Display + Error {}
 
 impl<T> SendError<T> for tokio::sync::mpsc::error::SendError<T> {}
 
 impl<T> SendError<T> for std::sync::mpsc::SendError<T> {}
 
 #[derive(Debug, thiserror::Error)]
-pub enum GuessFileError {
+pub(super) enum GuessFileError {
 	#[error("Unsupported file type: {}", .0)]
 	InvalidFileType(&'static str),
 	#[error(transparent)]
@@ -67,7 +67,7 @@ pub enum GuessFileError {
 	Io(#[from] std::io::Error),
 }
 
-pub async fn lurk_and_tag<I, P>(paths: I)
+pub(super) async fn lurk_and_tag<I, P>(paths: I)
 where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
@@ -194,7 +194,7 @@ fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
 
 /// Traverse `paths` recursively,
 /// sending any file (not a directory!) to `tx`.
-pub fn traverse<TX, I, P>(tx: &TX, paths: I)
+pub(super) fn traverse<TX, I, P>(tx: &TX, paths: I)
 where
 	TX: UnboundedTx<Item = ChanUntagged>,
 	I: IntoIterator<Item = P>,

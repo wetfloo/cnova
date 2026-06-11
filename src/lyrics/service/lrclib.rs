@@ -6,7 +6,7 @@ use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceResult;
 
 #[derive(Debug)]
-pub struct LrclibLyricsFetchService;
+pub(super) struct LrclibLyricsFetchService;
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

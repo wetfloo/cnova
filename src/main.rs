@@ -1,5 +1,6 @@
 // TODO: remove when we're done.
 #![allow(unused)]
+#![deny(unreachable_pub)]
 
 mod lyrics;
 mod worker;
