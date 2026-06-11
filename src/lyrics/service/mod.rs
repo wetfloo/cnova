@@ -1,11 +1,11 @@
 pub mod lrclib;
 
-use crate::lyrics::Lyrics;
-use crate::lyrics::TagData;
-
 use std::fmt;
 use std::pin::Pin;
 use std::sync::LazyLock;
+
+use crate::lyrics::Lyrics;
+use crate::lyrics::TagData;
 
 pub type LyricsServiceResult =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceError>> + Send + Sync>>;
