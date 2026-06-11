@@ -1,21 +1,18 @@
-mod ft;
-mod traverse;
-
 use std::error::Error;
 use std::fmt;
 use std::fs::OpenOptions;
 use std::path::Path;
 
-use ft::handle_file_guessing;
 use lofty::error::LoftyError;
 use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
 use lofty::tag::ItemKey;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
-use traverse::traverse_v2;
+use walkdir::WalkDir;
+use wetutil::prelude::*;
 
-pub(super) trait UnboundedTx {
+pub trait UnboundedTx {
 	type Item;
 	type Err: SendError<Self::Item>;
 
@@ -40,7 +37,7 @@ impl<T> UnboundedTx for std::sync::mpsc::Sender<T> {
 	}
 }
 
-pub(super) trait SendError<T>: fmt::Debug + fmt::Display + Error {}
+pub trait SendError<T>: fmt::Debug + fmt::Display + Error {}
 
 impl<T> SendError<T> for tokio::sync::mpsc::error::SendError<T> {}
 
@@ -48,7 +45,7 @@ impl<T> SendError<T> for std::sync::mpsc::SendError<T> {}
 
 #[derive(Debug, thiserror::Error)]
 pub enum GuessFileError {
-	#[error("Unsupported file type: {0}")]
+	#[error("Unsupported file type: {}", .0)]
 	InvalidFileType(&'static str),
 	#[error(transparent)]
 	Lofty(#[from] LoftyError),
@@ -202,5 +199,49 @@ impl TagTypesToWriteExt for lofty::file::TaggedFile {
 
 	fn tag_types_to_write(&self) -> Self::Iter {
 		TagTypesToWrite::new(self.primary_tag_type())
+	}
+}
+
+pub(super) fn handle_file_guessing<P>(path: P) -> Result<lofty::file::TaggedFile, GuessFileError>
+where
+	P: AsRef<Path>,
+{
+	// TODO::config: add a way to make lofty guess (or not) track's filetype.
+	lofty::probe::Probe::open(path)?
+		.guess_file_type()?
+		.read()
+		.err_into()
+		.and_then(|tagged_file| {
+			match tagged_file.file_type() {
+				// Do not support custom file types, since we wouldn't be able to write
+				// their tags anyway. Also, it gets rid of "non-music" file problem
+				// (.jpg, .png, .lrc, etc.).
+				lofty::file::FileType::Custom(ft) => Err(GuessFileError::InvalidFileType(ft)),
+				_ => Ok(tagged_file),
+			}
+		})
+}
+
+/// Traverse `paths` recursively,
+/// sending any file (not a directory!) to `tx`.
+pub fn traverse_v2<TX, I, P>(tx: &TX, paths: I)
+where
+	TX: UnboundedTx<Item = walkdir::DirEntry>,
+	I: IntoIterator<Item = P>,
+	P: AsRef<Path>,
+{
+	for path in paths {
+		for entry_path in WalkDir::new(&path)
+			.into_iter()
+			.consume_err(|err| {
+				// TODO::logging
+				dbg!(err);
+			})
+			.filter(|dir_entry| dir_entry.file_type().is_file())
+		{
+			// TODO::error_handling: remove unwrap,
+			// (replace with `expect` that the channel will never be closed?)
+			tx.send(entry_path).unwrap();
+		}
 	}
 }
