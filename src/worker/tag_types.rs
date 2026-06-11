@@ -48,3 +48,11 @@ impl TagTypesToWriteExt for lofty::file::TaggedFile {
 		TagTypesToWrite::new(self.primary_tag_type())
 	}
 }
+
+impl<T> TagTypesToWriteExt for lofty::file::BoundTaggedFile<T> {
+	type Iter = TagTypesToWrite;
+
+	fn tag_types_to_write(&self) -> Self::Iter {
+		TagTypesToWrite::new(self.primary_tag_type())
+	}
+}

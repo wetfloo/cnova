@@ -3,12 +3,14 @@ mod tag_types;
 use std::error::Error;
 use std::fmt;
 use std::fs::OpenOptions;
+use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
 
 use lofty::error::LoftyError;
 use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
+use lofty::io::FileLike;
 use lofty::tag::ItemKey;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
@@ -17,9 +19,12 @@ use wetutil::prelude::*;
 
 use crate::worker::tag_types::TagTypesToWriteExt as _;
 
-type Untagged = walkdir::DirEntry;
-type Tagged = (lofty::file::TaggedFile, PathBuf);
-type TaggedWithLyrics = (String, lofty::file::TaggedFile, PathBuf);
+type StdFile = std::fs::File;
+type TaggedFile = lofty::file::BoundTaggedFile<StdFile>;
+
+type ChanUntagged = walkdir::DirEntry;
+type ChanTagged = (TaggedFile, PathBuf);
+type ChanTaggedWithLyrics = (String, TaggedFile, PathBuf);
 
 pub trait UnboundedTx {
 	type Item;
@@ -67,9 +72,9 @@ where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
 {
-	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel::<Untagged>();
-	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<Tagged>();
-	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<TaggedWithLyrics>();
+	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel::<ChanUntagged>();
+	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<ChanTagged>();
+	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<ChanTaggedWithLyrics>();
 
 	let mut join_set = JoinSet::new();
 
@@ -88,7 +93,16 @@ where
 			// instead of spawning a task for every file.
 			tagging_worker_handles.spawn_blocking(move || {
 				let path = dir_entry.into_path();
-				match handle_file_guessing(&path) {
+				let file_res = OpenOptions::new()
+					.read(true)
+					.write(true)
+					.create(false)
+					.open(&path);
+
+				match file_res
+					.err_into()
+					.and_then(handle_file_guessing)
+				{
 					Ok(tagged_file) => {
 						tagged_tx.send((tagged_file, path));
 					},
@@ -140,11 +154,8 @@ where
 }
 
 // TODO::error_handling: change the return type to not box explicitly.
-fn update_file_tags<P>(path: P) -> Result<(), Box<dyn Error>>
-where
-	P: AsRef<Path>,
-{
-	let mut tagged_file = handle_file_guessing(path.as_ref())?;
+fn update_file_tags(file: StdFile) -> Result<(), Box<dyn Error>> {
+	let mut tagged_file = handle_file_guessing(file)?;
 
 	for tag_type in tagged_file.tag_types_to_write() {
 		// TODO::logging
@@ -159,23 +170,16 @@ where
 		}
 	}
 
-	let mut dest_file = OpenOptions::new()
-		.read(true)
-		.write(true)
-		.open(path.as_ref())?;
-	tagged_file.save_to(&mut dest_file, Default::default())?;
+	tagged_file.save(Default::default())?;
 
 	Ok(())
 }
 
-fn handle_file_guessing<P>(path: P) -> Result<lofty::file::TaggedFile, GuessFileError>
-where
-	P: AsRef<Path>,
-{
+fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
 	// TODO::config: add a way to make lofty guess (or not) track's filetype.
-	lofty::probe::Probe::open(path)?
+	lofty::probe::Probe::new(file)
 		.guess_file_type()?
-		.read()
+		.read_bound()
 		.err_into()
 		.and_then(|tagged_file| {
 			match tagged_file.file_type() {
@@ -192,7 +196,7 @@ where
 /// sending any file (not a directory!) to `tx`.
 pub fn traverse<TX, I, P>(tx: &TX, paths: I)
 where
-	TX: UnboundedTx<Item = Untagged>,
+	TX: UnboundedTx<Item = ChanUntagged>,
 	I: IntoIterator<Item = P>,
 	P: AsRef<Path>,
 {
