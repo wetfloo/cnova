@@ -45,12 +45,10 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 				.get(url)
 				.send()
 				.await
-				// TODO::error_handling: make a better user facing error when we're done here.
-				.map_err(|_| LyricsServiceError::Unknown)?
+				.map_err(LyricsServiceError::Network)?
 				.json()
 				.await
-				// TODO::error_handling: make a better user facing error when we're done here.
-				.map_err(|_| LyricsServiceError::Unknown)?;
+				.map_err(LyricsServiceError::Parse)?;
 
 			Ok(response.into())
 		})

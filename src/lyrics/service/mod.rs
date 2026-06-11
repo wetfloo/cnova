@@ -18,6 +18,10 @@ pub trait LyricsFetchService: fmt::Debug {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LyricsServiceError {
+	#[error("failed a network request")]
+	Network(#[source] reqwest::Error),
+	#[error("failed to parse")]
+	Parse(#[source] reqwest::Error),
 	#[error("unknown error")]
 	Unknown,
 }
