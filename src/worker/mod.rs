@@ -161,3 +161,46 @@ where
 
 	Ok(())
 }
+
+struct TagTypesToWrite {
+	tag_type: lofty::tag::TagType,
+	primary_shown: bool,
+}
+
+impl TagTypesToWrite {
+	fn new(tag_type: lofty::tag::TagType) -> Self {
+		Self {
+			tag_type,
+			primary_shown: false,
+		}
+	}
+}
+
+impl Iterator for TagTypesToWrite {
+	type Item = lofty::tag::TagType;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match (self.primary_shown, self.tag_type) {
+			(false, tag_type) => {
+				self.primary_shown = true;
+				Some(tag_type)
+			},
+			(true, lofty::tag::TagType::Id3v2) => Some(lofty::tag::TagType::Id3v1),
+			(true, _) => None,
+		}
+	}
+}
+
+trait TagTypesToWriteExt {
+	type Iter: Iterator<Item = lofty::tag::TagType>;
+
+	fn tag_types_to_write(&self) -> Self::Iter;
+}
+
+impl TagTypesToWriteExt for lofty::file::TaggedFile {
+	type Iter = TagTypesToWrite;
+
+	fn tag_types_to_write(&self) -> Self::Iter {
+		TagTypesToWrite::new(self.primary_tag_type())
+	}
+}
