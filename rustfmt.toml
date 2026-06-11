@@ -17,3 +17,4 @@ struct_variant_width = 15
 
 imports_granularity = "item"
 imports_layout = "Vertical"
+group_imports = "StdExternalCrate"
