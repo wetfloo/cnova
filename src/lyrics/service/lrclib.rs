@@ -1,4 +1,5 @@
-use super::HTTP_CLIENT;
+use std::sync::Arc;
+
 use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
@@ -6,7 +7,9 @@ use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceResult;
 
 #[derive(Debug)]
-pub(super) struct LrclibLyricsFetchService;
+struct LrclibLyricsFetchService {
+	http_client: Arc<reqwest::Client>,
+}
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,6 +23,17 @@ struct LrclibLyricsResponse {
 	instrumental: bool,
 	plain_lyrics: String,
 	synced_lyrics: String,
+}
+
+impl LrclibLyricsFetchService {
+	fn new<R>(http_client: R) -> Self
+	where
+		R: Into<Arc<reqwest::Client>>,
+	{
+		Self {
+			http_client: http_client.into(),
+		}
+	}
 }
 
 impl LyricsFetchService for LrclibLyricsFetchService {
@@ -39,8 +53,11 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 		.expect(
 			"since we typed this url by hand without user input, we expect it to always parse correctly",
 		);
-		Box::pin(async {
-			let response: LrclibLyricsResponse = HTTP_CLIENT
+
+		let http_client = self.http_client.clone();
+
+		Box::pin(async move {
+			let response: LrclibLyricsResponse = http_client
 				.get(url)
 				.send()
 				.await

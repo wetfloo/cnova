@@ -10,8 +10,6 @@ use crate::lyrics::TagData;
 pub(super) type LyricsServiceResult =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceError>> + Send + Sync>>;
 
-pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
-
 pub(super) trait LyricsFetchService: fmt::Debug {
 	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult;
 }
