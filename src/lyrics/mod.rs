@@ -1,7 +1,12 @@
 pub(crate) mod fetcher;
 pub(crate) mod service;
 
+use std::borrow::Cow;
 use std::time::Duration;
+
+use lofty::file::AudioFile as _;
+use lofty::file::TaggedFileExt as _;
+use lofty::tag::Accessor as _;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum Lyrics {
@@ -10,13 +15,37 @@ pub(crate) enum Lyrics {
 	Instrumental,
 }
 
-#[derive(Debug, PartialEq)]
-// TODO::perf consider using string slice refs here to implement zero-copy
-pub(crate) struct TagData {
-	pub(crate) artist: String,
-	pub(crate) album: String,
-	pub(crate) title: String,
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TagData<'a> {
+	pub(crate) artist: Option<Cow<'a, str>>,
+	pub(crate) album: Option<Cow<'a, str>>,
+	pub(crate) title: Option<Cow<'a, str>>,
 	pub(crate) duration: Duration,
+}
+
+impl<'i, 'o, T> From<&'i lofty::file::BoundTaggedFile<T>> for TagData<'o>
+where
+	'i: 'o,
+{
+	fn from(value: &'i lofty::file::BoundTaggedFile<T>) -> Self {
+		let artist = value
+			.primary_tag()
+			.and_then(|t| t.artist());
+		let album = value
+			.primary_tag()
+			.and_then(|t| t.album());
+		let title = value
+			.primary_tag()
+			.and_then(|t| t.title());
+		let duration = value.properties().duration();
+
+		Self {
+			artist,
+			album,
+			title,
+			duration,
+		}
+	}
 }
 
 #[cfg(test)]
@@ -39,7 +68,7 @@ mod test {
 		fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
 			Box::pin(future::ready(Ok(Lyrics::Unsynced(
 				format!(
-					"These are test lyrics for a song {} by {}.",
+					"These are test lyrics for a song {:?} by {:?}.",
 					data.title, data.artist,
 				),
 			))))
@@ -61,9 +90,9 @@ mod test {
 	async fn test_ok_only_service() {
 		let lyrics_fetcher = LyricsFetcherBuilder::new(Box::new(OkLyricsFetcher)).build();
 		let tag_data = TagData {
-			artist: "Deftones".into(),
-			album: "Adrenaline".into(),
-			title: "Fireal".into(),
+			artist: Some("Deftones".into()),
+			album: Some("Adrenaline".into()),
+			title: Some("Fireal".into()),
 			duration: Duration::from_secs((6 * 60) + 32),
 		};
 

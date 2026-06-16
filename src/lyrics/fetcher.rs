@@ -18,7 +18,7 @@ impl LyricsFetcher {
 	/// until one returns successfully, then its value will be returned.
 	/// Any remaining errors will be returned in [`Err`],
 	/// and any other services that could do work would be ignored.
-	pub(crate) async fn request_lyrics(&self, data: &TagData) -> LyricsFetcherResult {
+	pub(crate) async fn request_lyrics(&self, data: &TagData<'_>) -> LyricsFetcherResult {
 		let mut errors = Vec::with_capacity(0);
 
 		for service in self.services.iter() {
