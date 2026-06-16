@@ -19,7 +19,7 @@ struct LrclibLyricsResponse {
 	artist_name: String,
 	album_name: String,
 	/// Duration of a song in seconds.
-	pub(crate) duration: u64,
+	duration: u64,
 	instrumental: bool,
 	plain_lyrics: String,
 	synced_lyrics: String,
