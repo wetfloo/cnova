@@ -20,6 +20,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
 lofty = "0.24"
+pretty-type-name = "1.0.1"
 rand = "0.10"
 reqwest = { version = "0.13", features = [ "json", "query", "socks" ]}
 serde = { version = "1", features = ["derive"] }

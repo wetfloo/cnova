@@ -122,6 +122,7 @@ version = "0.4.0"
 dependencies = [
  "lofty",
  "openssl",
+ "pretty-type-name",
  "rand 0.10.1",
  "reqwest",
  "serde",
@@ -946,6 +947,12 @@ checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
 ]
+
+[[package]]
+name = "pretty-type-name"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0f73cdaf19b52e6143685c3606206e114a4dfa969d6b14ec3894c88eb38bd4b"
 
 [[package]]
 name = "prettyplease"
