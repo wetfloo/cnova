@@ -89,8 +89,9 @@ where
 	let lrclib_service = LrclibLyricsFetchService::new(http_client.clone());
 	let db_service = DbLyricsFetchService::new(db_conn);
 
-	let fetcher =
-		LyricsFetcherBuilder::new(Box::new(db_service)).add_service(Box::new(lrclib_service));
+	let fetcher = LyricsFetcherBuilder::new(Box::new(db_service))
+		.add_service(Box::new(lrclib_service))
+		.build();
 
 	let mut join_set = JoinSet::new();
 
