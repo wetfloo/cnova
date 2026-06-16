@@ -16,34 +16,66 @@ pub(crate) enum Lyrics {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TagData<'a> {
-	pub(crate) artist: Option<Cow<'a, str>>,
-	pub(crate) album: Option<Cow<'a, str>>,
-	pub(crate) title: Option<Cow<'a, str>>,
+pub(crate) struct TaggedFileData<'a> {
+	pub(crate) tag_data: TagData<'a>,
 	pub(crate) duration: Duration,
 }
 
-impl<'i, 'o, T> From<&'i lofty::file::BoundTaggedFile<T>> for TagData<'o>
+impl TaggedFileData<'_> {
+	#[inline]
+	pub(crate) fn title(&self) -> Option<&str> {
+		self.tag_data.title.as_deref()
+	}
+
+	#[inline]
+	pub(crate) fn artist(&self) -> Option<&str> {
+		self.tag_data.artist.as_deref()
+	}
+
+	#[inline]
+	pub(crate) fn album(&self) -> Option<&str> {
+		self.tag_data.album.as_deref()
+	}
+
+	#[inline]
+	pub(crate) fn duration(&self) -> Duration {
+		self.duration
+	}
+}
+
+impl<'i, 'o, T> From<&'i lofty::file::BoundTaggedFile<T>> for TaggedFileData<'o>
 where
 	'i: 'o,
 {
 	fn from(value: &'i lofty::file::BoundTaggedFile<T>) -> Self {
-		let artist = value
-			.primary_tag()
-			.and_then(|t| t.artist());
-		let album = value
-			.primary_tag()
-			.and_then(|t| t.album());
-		let title = value
-			.primary_tag()
-			.and_then(|t| t.title());
-		let duration = value.properties().duration();
-
 		Self {
-			artist,
-			album,
-			title,
-			duration,
+			tag_data: value
+				.primary_tag()
+				// TODO: use wetutil's into for Option
+				.map(|v| v.into())
+				.unwrap_or_default(),
+			duration: value.properties().duration(),
+		}
+	}
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TagData<'a> {
+	pub(crate) artist: Option<Cow<'a, str>>,
+	pub(crate) album: Option<Cow<'a, str>>,
+	pub(crate) title: Option<Cow<'a, str>>,
+}
+
+impl<'i, 'o> From<&'i lofty::tag::Tag> for TagData<'o>
+where
+	'i: 'o,
+{
+	#[inline]
+	fn from(value: &'i lofty::tag::Tag) -> Self {
+		Self {
+			artist: value.artist(),
+			album: value.album(),
+			title: value.title(),
 		}
 	}
 }
@@ -54,8 +86,11 @@ mod test {
 	use std::future;
 	use std::time::Duration;
 
+	use lofty::file::TaggedFile;
+
 	use super::Lyrics;
 	use super::TagData;
+	use crate::lyrics::TaggedFileData;
 	use crate::lyrics::fetcher::LyricsFetcherBuilder;
 	use crate::lyrics::service::LyricsFetchService;
 	use crate::lyrics::service::LyricsServiceError;
@@ -65,11 +100,12 @@ mod test {
 	struct OkLyricsFetcher;
 
 	impl LyricsFetchService for OkLyricsFetcher {
-		fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
+		fn request_lyrics(&self, data: &TaggedFileData) -> LyricsServiceResult {
 			Box::pin(future::ready(Ok(Lyrics::Unsynced(
 				format!(
 					"These are test lyrics for a song {:?} by {:?}.",
-					data.title, data.artist,
+					data.title(),
+					data.artist(),
 				),
 			))))
 		}
@@ -79,7 +115,7 @@ mod test {
 	struct ErrInstrumentalLyricsFetcher;
 
 	impl LyricsFetchService for ErrInstrumentalLyricsFetcher {
-		fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
+		fn request_lyrics(&self, data: &TaggedFileData) -> LyricsServiceResult {
 			Box::pin(future::ready(Err(
 				LyricsServiceError::Unknown,
 			)))
@@ -93,11 +129,14 @@ mod test {
 			artist: Some("Deftones".into()),
 			album: Some("Adrenaline".into()),
 			title: Some("Fireal".into()),
+		};
+		let tagged_file_data = TaggedFileData {
+			tag_data,
 			duration: Duration::from_secs((6 * 60) + 32),
 		};
 
 		let res = lyrics_fetcher
-			.request_lyrics(&tag_data)
+			.request_lyrics(&tagged_file_data)
 			.await;
 
 		assert_matches!(

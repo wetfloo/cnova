@@ -1,11 +1,13 @@
 use std::fmt;
 use std::sync::Arc;
 
+use lofty::file::TaggedFile;
 use pretty_type_name::pretty_type_name;
 
 use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
+use crate::lyrics::TaggedFileData;
 use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceResult;
 
@@ -45,16 +47,16 @@ impl fmt::Debug for LrclibLyricsFetchService {
 }
 
 impl LyricsFetchService for LrclibLyricsFetchService {
-	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
+	fn request_lyrics(&self, data: &TaggedFileData) -> LyricsServiceResult {
 		let mut params = Vec::with_capacity(4);
 
-		if let Some(v) = data.title.as_deref() {
+		if let Some(v) = data.title() {
 			params.push(("track_name", v));
 		}
-		if let Some(v) = data.artist.as_deref() {
+		if let Some(v) = data.artist() {
 			params.push(("artist_name", v));
 		}
-		if let Some(v) = data.album.as_deref() {
+		if let Some(v) = data.album() {
 			params.push(("album_name", v));
 		}
 		let duration = &data.duration.as_secs().to_string();

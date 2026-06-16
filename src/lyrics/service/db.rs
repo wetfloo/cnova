@@ -6,6 +6,7 @@ use pretty_type_name::pretty_type_name;
 use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
+use crate::lyrics::TaggedFileData;
 use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceResult;
 
@@ -28,7 +29,7 @@ impl fmt::Debug for DbLyricsFetchService {
 struct DbLyricsResponse {}
 
 impl LyricsFetchService for DbLyricsFetchService {
-	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult {
+	fn request_lyrics(&self, data: &TaggedFileData) -> LyricsServiceResult {
 		todo!()
 	}
 }
