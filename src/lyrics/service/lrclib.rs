@@ -1,15 +1,15 @@
 use std::fmt;
 use std::sync::Arc;
 
+use pretty_type_name::pretty_type_name;
+
 use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
 use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceResult;
 
-use pretty_type_name::pretty_type_name;
-
-struct LrclibLyricsFetchService {
+pub(crate) struct LrclibLyricsFetchService {
 	http_client: Arc<reqwest::Client>,
 }
 
@@ -28,7 +28,7 @@ struct LrclibLyricsResponse {
 }
 
 impl LrclibLyricsFetchService {
-	fn new<R>(http_client: R) -> Self
+	pub(crate) fn new<R>(http_client: R) -> Self
 	where
 		R: Into<Arc<reqwest::Client>>,
 	{

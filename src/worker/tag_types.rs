@@ -3,8 +3,9 @@ use lofty::file::TaggedFileExt as _;
 pub(super) struct TagTypesToWrite {
 	tag_type: lofty::tag::TagType,
 	/// Whether we have shown the primary tag type before.
+	///
 	/// For most types of tags,
-	/// this will be `true` after [`tag_type`]
+	/// this will be `true` after [`tag_type`][Self::tag_type]
 	/// is returned via this struct's [`Iterator`] implementation.
 	/// For some tag types, like [`Id3v2`](lofty::tag::TagType::Id3v2),
 	/// we also want to write a fallback tag (like [`Id3v1`](lofty::tag::TagType::Id3v1)).

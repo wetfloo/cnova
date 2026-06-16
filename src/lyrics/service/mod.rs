@@ -1,22 +1,25 @@
-pub(super) mod db;
-pub(super) mod lrclib;
+mod db;
+mod lrclib;
 
 use std::fmt;
 use std::pin::Pin;
 use std::sync::LazyLock;
 
+pub(crate) use db::DbLyricsFetchService;
+pub(crate) use lrclib::LrclibLyricsFetchService;
+
 use crate::lyrics::Lyrics;
 use crate::lyrics::TagData;
 
-pub(super) type LyricsServiceResult =
+pub(crate) type LyricsServiceResult =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceError>> + Send + Sync>>;
 
-pub(super) trait LyricsFetchService: fmt::Debug {
+pub(crate) trait LyricsFetchService: fmt::Debug {
 	fn request_lyrics(&self, data: &TagData) -> LyricsServiceResult;
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(super) enum LyricsServiceError {
+pub(crate) enum LyricsServiceError {
 	#[error("failed a network request")]
 	Network(#[source] reqwest::Error),
 	#[error("failed to parse")]

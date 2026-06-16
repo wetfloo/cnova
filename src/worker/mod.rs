@@ -6,18 +6,24 @@ use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use lofty::error::LoftyError;
 use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
 use lofty::io::FileLike;
 use lofty::tag::ItemKey;
+use sqlite::Connection;
+use sqlite::ConnectionThreadSafe;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
 use walkdir::WalkDir;
 use wetutil::prelude::*;
 
 use crate::lyrics::Lyrics;
+use crate::lyrics::fetcher::LyricsFetcherBuilder;
+use crate::lyrics::service::DbLyricsFetchService;
+use crate::lyrics::service::LrclibLyricsFetchService;
 use crate::worker::tag_types::TagTypesToWriteExt as _;
 
 type StdFile = std::fs::File;
@@ -76,6 +82,15 @@ where
 	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel::<ChanUntagged>();
 	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<ChanTagged>();
 	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<ChanTaggedWithLyrics>();
+
+	let http_client = Arc::new(reqwest::Client::new());
+	let db_conn = Connection::open_thread_safe(":memory:").unwrap();
+
+	let lrclib_service = LrclibLyricsFetchService::new(http_client.clone());
+	let db_service = DbLyricsFetchService::new(db_conn);
+
+	let fetcher =
+		LyricsFetcherBuilder::new(Box::new(lrclib_service)).add_service(Box::new(db_service));
 
 	let mut join_set = JoinSet::new();
 

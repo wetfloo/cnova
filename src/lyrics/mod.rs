@@ -1,5 +1,5 @@
-mod fetcher;
-mod service;
+pub(crate) mod fetcher;
+pub(crate) mod service;
 
 use std::time::Duration;
 
@@ -13,10 +13,10 @@ pub(crate) enum Lyrics {
 #[derive(Debug, PartialEq)]
 // TODO::perf consider using string slice refs here to implement zero-copy
 pub(crate) struct TagData {
-	pub artist: String,
-	pub album: String,
-	pub title: String,
-	pub duration: Duration,
+	pub(crate) artist: String,
+	pub(crate) album: String,
+	pub(crate) title: String,
+	pub(crate) duration: Duration,
 }
 
 #[cfg(test)]
