@@ -90,7 +90,7 @@ where
 	let db_service = DbLyricsFetchService::new(db_conn);
 
 	let fetcher =
-		LyricsFetcherBuilder::new(Box::new(lrclib_service)).add_service(Box::new(db_service));
+		LyricsFetcherBuilder::new(Box::new(db_service)).add_service(Box::new(lrclib_service));
 
 	let mut join_set = JoinSet::new();
 
