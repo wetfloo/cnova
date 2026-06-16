@@ -3,6 +3,7 @@ pub(crate) mod service;
 
 use std::borrow::Cow;
 use std::time::Duration;
+use wetutil::prelude::*;
 
 use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
@@ -51,8 +52,7 @@ where
 		Self {
 			tag_data: value
 				.primary_tag()
-				// TODO: use wetutil's into for Option
-				.map(|v| v.into())
+				.val_into()
 				.unwrap_or_default(),
 			duration: value.properties().duration(),
 		}

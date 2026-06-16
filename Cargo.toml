@@ -29,4 +29,4 @@ sqlite = "0.37"
 thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
-wetutil = "0.2"
+wetutil = "0.3"
