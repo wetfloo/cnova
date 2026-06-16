@@ -1,3 +1,4 @@
+pub(super) mod db;
 pub(super) mod lrclib;
 
 use std::fmt;
