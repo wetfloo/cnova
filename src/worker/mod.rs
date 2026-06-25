@@ -149,7 +149,7 @@ where
 
 			let mut lrc_fetch_worker_handles = JoinSet::new();
 
-			while let Some(tagged_file) = tagged_rx.recv().await {
+			while let Some(mut tagged_file) = tagged_rx.recv().await {
 				let lrc_tx = lrc_tx.clone();
 
 				// First, attempt to get lyrics from the database...
@@ -171,8 +171,37 @@ where
 
 				lrc_fetch_worker_handles.spawn(async move {
 					let tagged_file_data: TaggedFileData = (&tagged_file).into();
-					lrc_fetcher.request_lyrics(&tagged_file_data);
 					// TODO: write lyrics to the database
+					match lrc_fetcher
+						.request_lyrics(&tagged_file_data)
+						.await
+					{
+						Ok(v) => {
+							for tag_type in tagged_file.tag_types_to_write() {
+								if let Some(tag) = tagged_file.tag_mut(tag_type) {
+									use lofty::tag::ItemKey as K;
+
+									match v.clone() {
+										Lyrics::Synced(lrc) => {
+											tag.insert_text(K::Lyrics, lrc);
+										},
+										Lyrics::Unsynced(lrc) => {
+											tag.insert_text(K::UnsyncLyrics, lrc);
+										},
+										Lyrics::Instrumental => {
+											tag.remove_key(K::Lyrics);
+											tag.remove_key(K::UnsyncLyrics);
+										},
+									}
+								}
+							}
+						},
+
+						Err(e) => {
+							// TODO::logging
+							dbg!(e);
+						},
+					}
 				});
 			}
 
