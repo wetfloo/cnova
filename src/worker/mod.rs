@@ -139,6 +139,7 @@ where
 	// Step 3: use file tags to request lyrics
 	join_set.spawn(async move {
 		let mut lrc_fetch_worker_handles = JoinSet::new();
+
 		while let Some(tagged_file) = tagged_rx.recv().await {
 			let lrc_tx = lrc_tx.clone();
 			let lrc_fetcher = lrc_fetcher.clone();
