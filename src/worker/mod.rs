@@ -132,7 +132,7 @@ where
 		tagging_worker_handles.join_all().await;
 	});
 
-	// Step 3: use file tags to request lyrics
+	// Step 3: use file tags to request lyrics.
 	let db_local_set = tokio::task::LocalSet::new();
 	join_set.spawn_local_on(
 		async move {
