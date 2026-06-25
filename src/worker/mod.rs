@@ -246,7 +246,7 @@ fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
 		.and_then(|tagged_file| {
 			match tagged_file.file_type() {
 				// Do not support custom file types, since we wouldn't be able to write
-				// their tags anyway. Also, it gets rid of "non-music" file problem
+				// those tags anyway. Also, it gets rid of "non-music" file problem
 				// (.jpg, .png, .lrc, etc.).
 				lofty::file::FileType::Custom(ft) => Err(GuessFileError::InvalidFileType(ft)),
 				_ => Ok(tagged_file),
