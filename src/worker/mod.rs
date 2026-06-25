@@ -21,6 +21,7 @@ use walkdir::WalkDir;
 use wetutil::prelude::*;
 
 use crate::lyrics::Lyrics;
+use crate::lyrics::TaggedFileData;
 use crate::lyrics::fetcher::LyricsFetcherBuilder;
 use crate::lyrics::service::DbLyricsFetchService;
 use crate::lyrics::service::LrclibLyricsFetchService;
@@ -83,15 +84,16 @@ where
 	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<ChanTagged>();
 	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<ChanTaggedWithLyrics>();
 
-	let http_client = Arc::new(reqwest::Client::new());
+	let http_client: Arc<_> = reqwest::Client::new().into();
 	let db_conn = Connection::open_thread_safe(":memory:").unwrap();
 
 	let lrclib_service = LrclibLyricsFetchService::new(http_client.clone());
 	let db_service = DbLyricsFetchService::new(db_conn);
 
-	let lrc_fetcher = LyricsFetcherBuilder::new(Box::new(db_service))
+	let lrc_fetcher: Arc<_> = LyricsFetcherBuilder::new(Box::new(db_service))
 		.add_service(Box::new(lrclib_service))
-		.build();
+		.build()
+		.into();
 
 	let mut join_set = JoinSet::new();
 
@@ -139,13 +141,11 @@ where
 		let mut networking_worker_handles = JoinSet::new();
 		while let Some(tagged_file) = tagged_rx.recv().await {
 			let lrc_tx = lrc_tx.clone();
+			let lrc_fetcher = lrc_fetcher.clone();
+
 			networking_worker_handles.spawn(async move {
-				// TODO: some networking here.
-				// TODO: better lyrics type here than a plain `String`.
-				lrc_tx.send((
-					Lyrics::Unsynced("some lyrics here".into()),
-					tagged_file,
-				));
+				let tagged_file_data: TaggedFileData = (&tagged_file).into();
+				lrc_fetcher.request_lyrics(&tagged_file_data);
 			});
 		}
 
