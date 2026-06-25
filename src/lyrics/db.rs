@@ -158,14 +158,16 @@ mod test {
 	use crate::lyrics::db::DbCache;
 	use crate::lyrics::db::queries;
 
-	fn init_cache() -> DbCache {
-		sqlite::Connection::open(":memory:")
-			.and_then(DbCache::new)
-			.unwrap()
+	macro_rules! init_cache {
+		() => {
+			sqlite::Connection::open(":memory:")
+				.and_then(DbCache::new)
+				.unwrap()
+		};
 	}
 
 	#[test]
 	fn test_init_empty() {
-		let cache = init_cache();
+		let cache = init_cache!();
 	}
 }
