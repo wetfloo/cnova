@@ -23,10 +23,10 @@ impl DbCache {
 						.prepare(
 							// TODO: make a better statement
 							"SELECT lyrics \
-				FROM lrc \
-				WHERE artist = :artist \
-					AND title = :title \
-				LIMIT 1;",
+							FROM lrc \
+							WHERE artist = :artist \
+								AND title = :title \
+							LIMIT 1;",
 						)
 						// TODO::error_handling remove unwrap
 						.unwrap()
