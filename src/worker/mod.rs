@@ -138,18 +138,18 @@ where
 
 	// Step 3: use file tags to request lyrics
 	join_set.spawn(async move {
-		let mut networking_worker_handles = JoinSet::new();
+		let mut lrc_fetch_worker_handles = JoinSet::new();
 		while let Some(tagged_file) = tagged_rx.recv().await {
 			let lrc_tx = lrc_tx.clone();
 			let lrc_fetcher = lrc_fetcher.clone();
 
-			networking_worker_handles.spawn(async move {
+			lrc_fetch_worker_handles.spawn(async move {
 				let tagged_file_data: TaggedFileData = (&tagged_file).into();
 				lrc_fetcher.request_lyrics(&tagged_file_data);
 			});
 		}
 
-		networking_worker_handles
+		lrc_fetch_worker_handles
 			.join_all()
 			.await;
 	});
