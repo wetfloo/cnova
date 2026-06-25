@@ -1,10 +1,10 @@
-use pretty_type_name::pretty_type_name;
 use std::fmt;
 use std::time;
 use std::time::SystemTime;
 use std::time::SystemTimeError;
 use std::time::UNIX_EPOCH;
 
+use pretty_type_name::pretty_type_name;
 use strum::IntoDiscriminant;
 
 use crate::lyrics;
@@ -50,41 +50,11 @@ impl DbCache {
 		&mut self,
 		tagged_file_data: &TaggedFileData,
 	) -> Result<Option<lyrics::Lyrics>, DbCacheLyricsError> {
-		let opt = self
+		match self
 			.0
-			.with_get_lyrics_statement_mut::<Result<_, DbCacheLyricsError>>(|statement| {
-				statement.reset()?;
-
-				statement.bind((
-					":artist",
-					tagged_file_data
-						.artist()
-						.unwrap_or_default(),
-				))?;
-				statement.bind((
-					":album",
-					tagged_file_data
-						.album()
-						.unwrap_or_default(),
-				))?;
-				statement.bind((
-					":title",
-					tagged_file_data
-						.title()
-						.unwrap_or_default(),
-				))?;
-
-				Ok(match statement.next()? {
-					sqlite::State::Row => {
-						let lyrics: String = statement.read("lyrics")?;
-						let status: i64 = statement.read("status")?;
-						Some((lyrics, status))
-					},
-					sqlite::State::Done => None,
-				})
-			})?;
-
-		match opt {
+			.with_get_lyrics_statement_mut(|statement| {
+				Self::get_lrc_internal(statement, tagged_file_data)
+			})? {
 			Some((lyrics, status)) => LyricsDiscriminants::from_repr(status)
 				.map(|discriminant| {
 					Some(match discriminant {
@@ -100,6 +70,41 @@ impl DbCache {
 		}
 	}
 
+	fn get_lrc_internal(
+		statement: &mut sqlite::Statement,
+		tagged_file_data: &TaggedFileData,
+	) -> Result<Option<(String, i64)>, DbCacheLyricsError> {
+		statement.reset()?;
+
+		statement.bind((
+			":artist",
+			tagged_file_data
+				.artist()
+				.unwrap_or_default(),
+		))?;
+		statement.bind((
+			":album",
+			tagged_file_data
+				.album()
+				.unwrap_or_default(),
+		))?;
+		statement.bind((
+			":title",
+			tagged_file_data
+				.title()
+				.unwrap_or_default(),
+		))?;
+
+		Ok(match statement.next()? {
+			sqlite::State::Row => {
+				let lyrics: String = statement.read("lyrics")?;
+				let status: i64 = statement.read("status")?;
+				Some((lyrics, status))
+			},
+			sqlite::State::Done => None,
+		})
+	}
+
 	pub(crate) fn insert_lrc(
 		&mut self,
 		tagged_file_data: &TaggedFileData,
@@ -107,47 +112,55 @@ impl DbCache {
 	) -> Result<(), DbCacheLyricsError> {
 		self.0
 			.with_insert_lyrics_statement_mut(|statement| {
-				statement.reset();
-
-				statement.bind((
-					":lyrics",
-					lyrics.as_str().unwrap_or_default(),
-				))?;
-				statement.bind((
-					":artist",
-					tagged_file_data
-						.artist()
-						.unwrap_or_default(),
-				))?;
-				statement.bind((
-					":album",
-					tagged_file_data
-						.album()
-						.unwrap_or_default(),
-				))?;
-				statement.bind((
-					":title",
-					tagged_file_data
-						.title()
-						.unwrap_or_default(),
-				))?;
-				statement.bind((
-					":duration_secs",
-					tagged_file_data.duration.as_secs_f64(),
-				))?;
-				statement.bind((
-					":timestamp",
-					SystemTime::now()
-						.duration_since(UNIX_EPOCH)?
-						.as_secs_f64(),
-				))?;
-				statement.bind((":status", lyrics.discriminant() as i64))?;
-
-				match statement.next()? {
-					sqlite::State::Row => unreachable!(),
-					sqlite::State::Done => Ok(()),
-				}
+				Self::insert_lrc_internal(statement, tagged_file_data, lyrics)
 			})
+	}
+
+	fn insert_lrc_internal(
+		statement: &mut sqlite::Statement,
+		tagged_file_data: &TaggedFileData,
+		lyrics: Lyrics,
+	) -> Result<(), DbCacheLyricsError> {
+		statement.reset();
+
+		statement.bind((
+			":lyrics",
+			lyrics.as_str().unwrap_or_default(),
+		))?;
+		statement.bind((
+			":artist",
+			tagged_file_data
+				.artist()
+				.unwrap_or_default(),
+		))?;
+		statement.bind((
+			":album",
+			tagged_file_data
+				.album()
+				.unwrap_or_default(),
+		))?;
+		statement.bind((
+			":title",
+			tagged_file_data
+				.title()
+				.unwrap_or_default(),
+		))?;
+		statement.bind((
+			":duration_secs",
+			tagged_file_data.duration.as_secs_f64(),
+		))?;
+		statement.bind((
+			":timestamp",
+			SystemTime::now()
+				.duration_since(UNIX_EPOCH)?
+				.as_secs_f64(),
+		))?;
+		statement.bind((":status", lyrics.discriminant() as i64))?;
+
+		match statement.next()? {
+			sqlite::State::Row => unreachable!(),
+			sqlite::State::Done => Ok(()),
+		}
 	}
 }
 
