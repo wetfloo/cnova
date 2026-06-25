@@ -13,7 +13,7 @@ use crate::lyrics::TagData;
 use crate::lyrics::TaggedFileData;
 
 pub(crate) type LyricsServiceResult =
-	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceError>> + Send + Sync>>;
+	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceError>> + Send + Sync + 'static>>;
 
 pub(crate) trait LyricsFetchService: fmt::Debug {
 	fn request_lyrics(&self, data: &TaggedFileData) -> LyricsServiceResult;
