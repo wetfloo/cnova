@@ -1,3 +1,10 @@
+use std::time;
+use std::time::SystemTime;
+use std::time::SystemTimeError;
+use std::time::UNIX_EPOCH;
+
+use strum::IntoDiscriminant;
+
 use crate::lyrics;
 use crate::lyrics::Lyrics;
 use crate::lyrics::LyricsDiscriminants;
@@ -35,28 +42,24 @@ impl DbCache {
 	) -> Result<lyrics::Lyrics, DbCacheLyricsError> {
 		self.0
 			.with_get_lyrics_statement_mut::<Result<_, DbCacheLyricsError>>(|statement| {
-				statement.bind(
-					&[
-						(
-							":artist",
-							tagged_file_data
-								.artist()
-								.unwrap_or_default(),
-						),
-						(
-							":album",
-							tagged_file_data
-								.album()
-								.unwrap_or_default(),
-						),
-						(
-							":title",
-							tagged_file_data
-								.title()
-								.unwrap_or_default(),
-						),
-					][..],
-				)?;
+				statement.bind((
+					":artist",
+					tagged_file_data
+						.artist()
+						.unwrap_or_default(),
+				))?;
+				statement.bind((
+					":album",
+					tagged_file_data
+						.album()
+						.unwrap_or_default(),
+				))?;
+				statement.bind((
+					":title",
+					tagged_file_data
+						.title()
+						.unwrap_or_default(),
+				))?;
 
 				Ok(())
 			})?;
@@ -80,6 +83,51 @@ impl DbCache {
 				status,
 			))
 	}
+
+	pub(crate) fn insert_lrc(
+		&mut self,
+		tagged_file_data: &TaggedFileData,
+		lyrics: Lyrics,
+	) -> Result<(), DbCacheLyricsError> {
+		self.0
+			.with_insert_lyrics_statement_mut(|statement| {
+				statement.bind((
+					":lyrics",
+					lyrics.as_str().unwrap_or_default(),
+				))?;
+				statement.bind((
+					":artist",
+					tagged_file_data
+						.artist()
+						.unwrap_or_default(),
+				))?;
+				statement.bind((
+					":album",
+					tagged_file_data
+						.album()
+						.unwrap_or_default(),
+				))?;
+				statement.bind((
+					":title",
+					tagged_file_data
+						.title()
+						.unwrap_or_default(),
+				))?;
+				statement.bind((
+					":duration_secs",
+					tagged_file_data.duration.as_secs_f64(),
+				))?;
+				statement.bind((
+					":timestamp",
+					SystemTime::now()
+						.duration_since(UNIX_EPOCH)?
+						.as_secs_f64(),
+				))?;
+				statement.bind((":status", lyrics.discriminant() as i64))?;
+
+				Ok(())
+			})
+	}
 }
 
 impl TryFrom<DbConnection> for DbCache {
@@ -97,6 +145,8 @@ pub(crate) enum DbCacheLyricsError {
 	StatusMismatch(i64),
 	#[error(transparent)]
 	Sqlite(#[from] sqlite::Error),
+	#[error(transparent)]
+	Time(#[from] SystemTimeError),
 }
 
 pub(super) mod queries {
@@ -107,7 +157,7 @@ pub(super) mod queries {
 		album TEXT NOT NULL, \
 		title TEXT NOT NULL, \
 		duration_secs REAL NOT NULL, \
-		timestamp INTEGER NOT NULL, \
+		timestamp REAL NOT NULL, \
 		status INTEGER NOT NULL\
 	) STRICT;\
 	";

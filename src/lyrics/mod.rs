@@ -19,6 +19,15 @@ pub(crate) enum Lyrics {
 	Instrumental,
 }
 
+impl Lyrics {
+	pub(crate) fn as_str(&self) -> Option<&str> {
+		match self {
+			Lyrics::Synced(v) | Lyrics::Unsynced(v) => Some(v),
+			Lyrics::Instrumental => None,
+		}
+	}
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TaggedFileData<'a> {
 	pub(crate) tag_data: TagData<'a>,
