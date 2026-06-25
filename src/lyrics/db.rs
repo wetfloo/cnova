@@ -1,3 +1,5 @@
+use pretty_type_name::pretty_type_name;
+use std::fmt;
 use std::time;
 use std::time::SystemTime;
 use std::time::SystemTimeError;
@@ -14,6 +16,12 @@ pub(crate) type DbConnection = sqlite::Connection;
 
 pub(crate) struct DbCache(DbCacheInner);
 
+impl fmt::Debug for DbCache {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(&pretty_type_name::<Self>())
+	}
+}
+
 #[ouroboros::self_referencing]
 struct DbCacheInner {
 	db_conn: DbConnection,
@@ -27,6 +35,8 @@ struct DbCacheInner {
 
 impl DbCache {
 	pub(crate) fn new(db_conn: DbConnection) -> Result<Self, sqlite::Error> {
+		db_conn.execute(queries::INIT_TABLE_LRC)?;
+
 		let inner = DbCacheInner::try_new(
 			db_conn,
 			|db_conn: &DbConnection| db_conn.prepare(queries::GET_LRC),
@@ -39,9 +49,12 @@ impl DbCache {
 	pub(crate) fn get_lrc(
 		&mut self,
 		tagged_file_data: &TaggedFileData,
-	) -> Result<lyrics::Lyrics, DbCacheLyricsError> {
-		self.0
+	) -> Result<Option<lyrics::Lyrics>, DbCacheLyricsError> {
+		let opt = self
+			.0
 			.with_get_lyrics_statement_mut::<Result<_, DbCacheLyricsError>>(|statement| {
+				statement.reset()?;
+
 				statement.bind((
 					":artist",
 					tagged_file_data
@@ -61,27 +74,30 @@ impl DbCache {
 						.unwrap_or_default(),
 				))?;
 
-				Ok(())
+				Ok(match statement.next()? {
+					sqlite::State::Row => {
+						let lyrics: String = statement.read("lyrics")?;
+						let status: i64 = statement.read("status")?;
+						Some((lyrics, status))
+					},
+					sqlite::State::Done => None,
+				})
 			})?;
 
-		let lyrics: String = self
-			.0
-			.borrow_get_lyrics_statement()
-			.read("lyrics")?;
-		let status: i64 = self
-			.0
-			.borrow_get_lyrics_statement()
-			.read("status")?;
-
-		LyricsDiscriminants::from_repr(status)
-			.map(|discriminant| match discriminant {
-				LyricsDiscriminants::Synced => Lyrics::Synced(lyrics),
-				LyricsDiscriminants::Unsynced => Lyrics::Unsynced(lyrics),
-				LyricsDiscriminants::Instrumental => Lyrics::Instrumental,
-			})
-			.ok_or(DbCacheLyricsError::StatusMismatch(
-				status,
-			))
+		match opt {
+			Some((lyrics, status)) => LyricsDiscriminants::from_repr(status)
+				.map(|discriminant| {
+					Some(match discriminant {
+						LyricsDiscriminants::Synced => Lyrics::Synced(lyrics),
+						LyricsDiscriminants::Unsynced => Lyrics::Unsynced(lyrics),
+						LyricsDiscriminants::Instrumental => Lyrics::Instrumental,
+					})
+				})
+				.ok_or(DbCacheLyricsError::StatusMismatch(
+					status,
+				)),
+			None => Ok(None),
+		}
 	}
 
 	pub(crate) fn insert_lrc(
@@ -91,6 +107,8 @@ impl DbCache {
 	) -> Result<(), DbCacheLyricsError> {
 		self.0
 			.with_insert_lyrics_statement_mut(|statement| {
+				statement.reset();
+
 				statement.bind((
 					":lyrics",
 					lyrics.as_str().unwrap_or_default(),
@@ -125,7 +143,10 @@ impl DbCache {
 				))?;
 				statement.bind((":status", lyrics.discriminant() as i64))?;
 
-				Ok(())
+				match statement.next()? {
+					sqlite::State::Row => unreachable!(),
+					sqlite::State::Done => Ok(()),
+				}
 			})
 	}
 }
@@ -150,47 +171,37 @@ pub(crate) enum DbCacheLyricsError {
 }
 
 pub(super) mod queries {
-	const INIT_TABLE_LRC: &str = "\
-	CREATE TABLE IF NOT EXISTS lrc (\
-		lyrics TEXT NOT NULL, \
-		artist TEXT NOT NULL, \
-		album TEXT NOT NULL, \
-		title TEXT NOT NULL, \
-		duration_secs REAL NOT NULL, \
-		timestamp REAL NOT NULL, \
-		status INTEGER NOT NULL\
-	) STRICT;\
+	pub(super) const INIT_TABLE_LRC: &str = "\
+		CREATE TABLE IF NOT EXISTS lrc (\
+			lyrics TEXT NOT NULL, \
+			artist TEXT NOT NULL, \
+			album TEXT NOT NULL, \
+			title TEXT NOT NULL, \
+			duration_secs REAL NOT NULL, \
+			timestamp REAL NOT NULL, \
+			status INTEGER NOT NULL\
+		) STRICT;\
 	";
 
-	macro_rules! transact {
-		($($arg: expr),+ $(,)?) => (
-			{
-				const_format::concatcp!(
-					"BEGIN TRANSACTION;",
-					' ',
-					INIT_TABLE_LRC,
-					' ',
-					$( ( $arg ), ' ', )*
-					"COMMIT;",
-				)
-			}
-		)
-	}
-
-	pub(super) const GET_LRC: &str = transact!(
-		"\
+	pub(super) const GET_LRC: &str = "\
 		SELECT lyrics, status \
-			FROM lrc \
+		FROM lrc \
 		WHERE artist = :artist \
 			AND album = :album \
 			AND title = :title \
 		LIMIT 1;\
-		",
-	);
+	";
 
-	pub(super) const INSERT_LRC: &str = transact!(
-		"\
-		INSERT INTO lrc VALUES (\
+	pub(super) const INSERT_LRC: &str = "\
+		INSERT INTO lrc (
+			lyrics, \
+			artist, \
+			album, \
+			title, \
+			duration_secs, \
+			timestamp, \
+			status\
+		) VALUES (\
 			:lyrics, \
 			:artist, \
 			:album, \
@@ -199,25 +210,59 @@ pub(super) mod queries {
 			:timestamp, \
 			:status\
 		);\
-		"
-	);
+	";
 }
 
 #[cfg(test)]
 mod test {
+	use std::assert_matches;
+	use std::borrow::Cow;
+	use std::time::Duration;
+
+	use crate::lyrics::Lyrics;
+	use crate::lyrics::TagData;
+	use crate::lyrics::TaggedFileData;
 	use crate::lyrics::db::DbCache;
+	use crate::lyrics::db::DbCacheLyricsError;
 	use crate::lyrics::db::queries;
 
 	macro_rules! init_cache {
-		() => {
-			sqlite::Connection::open(":memory:")
-				.and_then(DbCache::new)
-				.unwrap()
-		};
+		() => {{
+			let res = sqlite::Connection::open(":memory:").and_then(DbCache::new);
+
+			assert_matches!(res, Ok(_));
+
+			res.expect("we've just verified that this value is Ok")
+		}};
 	}
 
 	#[test]
 	fn test_init_empty() {
-		let cache = init_cache!();
+		let mut cache = init_cache!();
+
+		let tag_data = TagData {
+			artist: Some(Cow::Owned(
+				"artist goes here".to_owned(),
+			)),
+			album: Some(Cow::Owned("album goes here".to_owned())),
+			title: Some(Cow::Owned("title goes here".to_owned())),
+		};
+		let tagged_file_data = TaggedFileData {
+			tag_data,
+			duration: Duration::from_secs(42),
+		};
+
+		assert_matches!(
+			cache.insert_lrc(
+				&tagged_file_data,
+				Lyrics::Synced("test".to_owned()),
+			),
+			Ok(()),
+		);
+
+		assert_matches!(
+			cache.get_lrc(&tagged_file_data),
+			Ok(Some(Lyrics::Synced(_))),
+		);
 	}
 }
