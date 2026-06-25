@@ -106,6 +106,7 @@ where
 	// Step 2: read file tags, when possible.
 	join_set.spawn(async move {
 		let mut tagging_worker_handles = JoinSet::new();
+
 		while let Some(dir_entry) = untagged_rx.recv().await {
 			let tagged_tx = tagged_tx.clone();
 			// TODO::perf consider using rayon's thread pool
@@ -184,6 +185,7 @@ where
 	// Step 4: write lyrics tags back to files.
 	join_set.spawn(async move {
 		let mut writing_worker_handles = JoinSet::new();
+
 		while let Some((lyrics, tagged_file)) = lrc_rx.recv().await {
 			writing_worker_handles.spawn_blocking(|| {
 				// TODO: write tags back to files.
