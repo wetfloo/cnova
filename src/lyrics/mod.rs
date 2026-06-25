@@ -3,11 +3,11 @@ pub(crate) mod service;
 
 use std::borrow::Cow;
 use std::time::Duration;
-use wetutil::prelude::*;
 
 use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
 use lofty::tag::Accessor as _;
+use wetutil::prelude::*;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum Lyrics {
