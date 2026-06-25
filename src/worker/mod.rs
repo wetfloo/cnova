@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use lofty::config::WriteOptions;
 use lofty::error::LoftyError;
 use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
@@ -177,24 +178,7 @@ where
 						.await
 					{
 						Ok(v) => {
-							for tag_type in tagged_file.tag_types_to_write() {
-								if let Some(tag) = tagged_file.tag_mut(tag_type) {
-									use lofty::tag::ItemKey as K;
-
-									match v.clone() {
-										Lyrics::Synced(lrc) => {
-											tag.insert_text(K::Lyrics, lrc);
-										},
-										Lyrics::Unsynced(lrc) => {
-											tag.insert_text(K::UnsyncLyrics, lrc);
-										},
-										Lyrics::Instrumental => {
-											tag.remove_key(K::Lyrics);
-											tag.remove_key(K::UnsyncLyrics);
-										},
-									}
-								}
-							}
+							lrc_tx.send((v, tagged_file));
 						},
 
 						Err(e) => {
@@ -217,8 +201,38 @@ where
 		let mut writing_worker_handles = JoinSet::new();
 
 		while let Some((lyrics, tagged_file)) = lrc_rx.recv().await {
-			writing_worker_handles.spawn_blocking(|| {
-				// TODO: write tags back to files.
+			writing_worker_handles.spawn_blocking(move || {
+				let mut tagged_file = tagged_file;
+
+				for tag_type in tagged_file.tag_types_to_write() {
+					if let Some(tag) = tagged_file.tag_mut(tag_type) {
+						// TODO::perf don't clone this if it's not needed
+						let lyrics = lyrics.clone();
+
+						use lofty::tag::ItemKey as K;
+
+						match lyrics {
+							Lyrics::Synced(lrc) => {
+								tag.insert_text(K::Lyrics, lrc);
+							},
+							Lyrics::Unsynced(lrc) => {
+								tag.insert_text(K::UnsyncLyrics, lrc);
+							},
+							Lyrics::Instrumental => {
+								tag.remove_key(K::Lyrics);
+								tag.remove_key(K::UnsyncLyrics);
+							},
+						}
+					}
+				}
+
+				match tagged_file.save(WriteOptions::default()) {
+					Ok(_) => (),
+					Err(e) => {
+						// TODO::logging
+						dbg!(e);
+					},
+				}
 			});
 		}
 
