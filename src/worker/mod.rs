@@ -243,28 +243,6 @@ where
 	join_set.join_all().await;
 }
 
-// TODO::error_handling: change the return type to not box explicitly.
-fn update_file_tags(file: StdFile) -> Result<(), Box<dyn Error>> {
-	let mut tagged_file = handle_file_guessing(file)?;
-
-	for tag_type in tagged_file.tag_types_to_write() {
-		// TODO::logging
-		dbg!(&tag_type);
-
-		if let Some(tag) = tagged_file.tag_mut(tag_type) {
-			// TODO::logging
-			dbg!(tag.insert_text(
-				lofty::tag::ItemKey::Lyrics,
-				"I've been here before!".to_owned(),
-			));
-		}
-	}
-
-	tagged_file.save(Default::default())?;
-
-	Ok(())
-}
-
 fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
 	// TODO::config: add a way to make lofty guess (or not) track's filetype.
 	lofty::probe::Probe::new(file)
