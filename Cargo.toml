@@ -20,6 +20,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
 lofty = "0.24"
+ouroboros = "0.18"
 pretty-type-name = "1.0.1"
 rand = "0.10"
 reqwest = { version = "0.13", features = [ "json", "query", "socks" ]}

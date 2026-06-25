@@ -7,14 +7,14 @@ use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use lofty::error::LoftyError;
 use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
 use lofty::io::FileLike;
 use lofty::tag::ItemKey;
-use sqlite::Connection;
-use sqlite::ConnectionThreadSafe;
+use sqlite::Cursor;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
 use walkdir::WalkDir;
@@ -22,8 +22,8 @@ use wetutil::prelude::*;
 
 use crate::lyrics::Lyrics;
 use crate::lyrics::TaggedFileData;
+use crate::lyrics::db::DbCache;
 use crate::lyrics::fetcher::LyricsFetcherBuilder;
-use crate::lyrics::service::DbLyricsFetchService;
 use crate::lyrics::service::LrclibLyricsFetchService;
 use crate::worker::tag_types::TagTypesToWriteExt as _;
 
@@ -84,16 +84,16 @@ where
 	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<ChanTagged>();
 	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<ChanTaggedWithLyrics>();
 
-	let http_client: Arc<_> = reqwest::Client::new().into();
-	let db_conn = Connection::open_thread_safe(":memory:").unwrap();
+	let lrc_fetcher: LazyLock<Arc<_>> = LazyLock::new(|| {
+		// TODO: use this client for more services, outside of just LRCLIB
+		let http_client: Arc<_> = reqwest::Client::new().into();
 
-	let lrclib_service = LrclibLyricsFetchService::new(http_client.clone());
-	let db_service = DbLyricsFetchService::new(db_conn);
+		let lrclib_service = LrclibLyricsFetchService::new(http_client.clone());
 
-	let lrc_fetcher: Arc<_> = LyricsFetcherBuilder::new(Box::new(db_service))
-		.add_service(Box::new(lrclib_service))
-		.build()
-		.into();
+		LyricsFetcherBuilder::new(Box::new(lrclib_service))
+			.build()
+			.into()
+	});
 
 	let mut join_set = JoinSet::new();
 
@@ -137,23 +137,49 @@ where
 	});
 
 	// Step 3: use file tags to request lyrics
-	join_set.spawn(async move {
-		let mut lrc_fetch_worker_handles = JoinSet::new();
+	let db_local_set = tokio::task::LocalSet::new();
+	join_set.spawn_local_on(
+		async move {
+			let mut db_cache = sqlite::Connection::open(":memory:")
+				.map(DbCache::new)
+				// TODO::error_handling remove unwrap
+				.unwrap();
 
-		while let Some(tagged_file) = tagged_rx.recv().await {
-			let lrc_tx = lrc_tx.clone();
-			let lrc_fetcher = lrc_fetcher.clone();
+			let mut lrc_fetch_worker_handles = JoinSet::new();
 
-			lrc_fetch_worker_handles.spawn(async move {
-				let tagged_file_data: TaggedFileData = (&tagged_file).into();
-				lrc_fetcher.request_lyrics(&tagged_file_data);
-			});
-		}
+			while let Some(tagged_file) = tagged_rx.recv().await {
+				let lrc_tx = lrc_tx.clone();
 
-		lrc_fetch_worker_handles
-			.join_all()
-			.await;
-	});
+				// First, attempt to get lyrics from the database...
+				match db_cache.get_lrc(&(&tagged_file).into()) {
+					Ok(v) => {
+						// TODO: send actual lyrics instead of just wrapping String
+						lrc_tx.send((Lyrics::Unsynced(v), tagged_file));
+						// ...if that worked, move on.
+						continue;
+					},
+					Err(e) => {
+						// TODO::logging add logging here
+						dbg!(e);
+					},
+				}
+
+				// ...if it didn't work, get/init network lyrics fetcher.
+				let lrc_fetcher = lrc_fetcher.clone();
+
+				lrc_fetch_worker_handles.spawn(async move {
+					let tagged_file_data: TaggedFileData = (&tagged_file).into();
+					lrc_fetcher.request_lyrics(&tagged_file_data);
+					// TODO: write lyrics to the database
+				});
+			}
+
+			lrc_fetch_worker_handles
+				.join_all()
+				.await;
+		},
+		&db_local_set,
+	);
 
 	// Step 4: write lyrics tags back to files.
 	join_set.spawn(async move {
@@ -167,6 +193,7 @@ where
 		writing_worker_handles.join_all().await;
 	});
 
+	db_local_set.await;
 	join_set.join_all().await;
 }
 

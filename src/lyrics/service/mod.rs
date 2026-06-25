@@ -1,11 +1,9 @@
-mod db;
 mod lrclib;
 
 use std::fmt;
 use std::pin::Pin;
 use std::sync::LazyLock;
 
-pub(crate) use db::DbLyricsFetchService;
 pub(crate) use lrclib::LrclibLyricsFetchService;
 
 use crate::lyrics::Lyrics;

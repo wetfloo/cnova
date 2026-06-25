@@ -1,3 +1,4 @@
+pub(crate) mod db;
 pub(crate) mod fetcher;
 pub(crate) mod service;
 
