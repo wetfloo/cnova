@@ -1,3 +1,6 @@
+use crate::lyrics;
+use crate::lyrics::Lyrics;
+use crate::lyrics::LyricsDiscriminants;
 use crate::lyrics::TaggedFileData;
 
 pub(crate) type DbConnection = sqlite::Connection;
@@ -29,15 +32,21 @@ impl DbCache {
 	pub(crate) fn get_lrc(
 		&mut self,
 		tagged_file_data: &TaggedFileData,
-	) -> Result<String, sqlite::Error> {
+	) -> Result<lyrics::Lyrics, DbCacheLyricsError> {
 		self.0
-			.with_get_lyrics_statement_mut(|statement| {
+			.with_get_lyrics_statement_mut::<Result<_, DbCacheLyricsError>>(|statement| {
 				statement.bind(
 					&[
 						(
 							":artist",
 							tagged_file_data
 								.artist()
+								.unwrap_or_default(),
+						),
+						(
+							":album",
+							tagged_file_data
+								.album()
 								.unwrap_or_default(),
 						),
 						(
@@ -49,8 +58,27 @@ impl DbCache {
 					][..],
 				)?;
 
-				statement.read(0)
+				Ok(())
+			})?;
+
+		let lyrics: String = self
+			.0
+			.borrow_get_lyrics_statement()
+			.read("lyrics")?;
+		let status: i64 = self
+			.0
+			.borrow_get_lyrics_statement()
+			.read("status")?;
+
+		LyricsDiscriminants::from_repr(status)
+			.map(|discriminant| match discriminant {
+				LyricsDiscriminants::Synced => Lyrics::Synced(lyrics),
+				LyricsDiscriminants::Unsynced => Lyrics::Unsynced(lyrics),
+				LyricsDiscriminants::Instrumental => Lyrics::Instrumental,
 			})
+			.ok_or(DbCacheLyricsError::StatusMismatch(
+				status,
+			))
 	}
 }
 
@@ -63,11 +91,20 @@ impl TryFrom<DbConnection> for DbCache {
 	}
 }
 
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum DbCacheLyricsError {
+	#[error("Invalid lyrics status in the database: {}", .0)]
+	StatusMismatch(i64),
+	#[error(transparent)]
+	Sqlite(#[from] sqlite::Error),
+}
+
 pub(super) mod queries {
 	const INIT_TABLE_LRC: &str = "\
 	CREATE TABLE IF NOT EXISTS lrc (\
 		lyrics TEXT NOT NULL, \
 		artist TEXT NOT NULL, \
+		album TEXT NOT NULL, \
 		title TEXT NOT NULL, \
 		duration_secs REAL NOT NULL, \
 		timestamp INTEGER NOT NULL, \
@@ -92,9 +129,10 @@ pub(super) mod queries {
 
 	pub(super) const GET_LRC: &str = transact!(
 		"\
-		SELECT lyrics \
-		FROM lrc \
+		SELECT lyrics, status \
+			FROM lrc \
 		WHERE artist = :artist \
+			AND album = :album \
 			AND title = :title \
 		LIMIT 1;\
 		",
@@ -105,6 +143,7 @@ pub(super) mod queries {
 		INSERT INTO lrc VALUES (\
 			:lyrics, \
 			:artist, \
+			:album, \
 			:title, \
 			:duration_secs, \
 			:timestamp, \

@@ -10,7 +10,9 @@ use lofty::file::TaggedFileExt as _;
 use lofty::tag::Accessor as _;
 use wetutil::prelude::*;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, strum::EnumDiscriminants)]
+#[strum_discriminants(repr(i64))]
+#[strum_discriminants(derive(strum::FromRepr))]
 pub(crate) enum Lyrics {
 	Synced(String),
 	Unsynced(String),
