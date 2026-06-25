@@ -200,12 +200,10 @@ where
 
 				for tag_type in tagged_file.tag_types_to_write() {
 					if let Some(tag) = tagged_file.tag_mut(tag_type) {
-						// TODO::perf don't clone this if it's not needed
-						let lyrics = lyrics.clone();
-
 						use lofty::tag::ItemKey as K;
 
-						match lyrics {
+						// TODO::perf don't clone this if it's not needed
+						match lyrics.clone() {
 							Lyrics::Synced(lrc) => {
 								tag.insert_text(K::Lyrics, lrc);
 							},
