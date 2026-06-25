@@ -19,6 +19,7 @@ lto = "thin"
 openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
+const_format = "0.2"
 lofty = "0.24"
 ouroboros = "0.18"
 pretty-type-name = "1.0.1"

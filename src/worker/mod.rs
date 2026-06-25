@@ -138,7 +138,7 @@ where
 		async move {
 			// TODO: accept configuration to open the database in different locations
 			let mut db_cache = sqlite::Connection::open(":memory:")
-				.map(DbCache::new)
+				.and_then(DbCache::new)
 				// TODO::error_handling remove unwrap
 				.unwrap();
 

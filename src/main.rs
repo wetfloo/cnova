@@ -7,7 +7,6 @@ mod worker;
 
 use std::env::home_dir;
 
-
 #[tokio::main]
 async fn main() {
 	let mut paths = Vec::new();
