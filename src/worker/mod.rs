@@ -3,19 +3,13 @@ mod tag_types;
 use std::error::Error;
 use std::fmt;
 use std::fs::OpenOptions;
-use std::io::BufReader;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
 use lofty::config::WriteOptions;
 use lofty::error::LoftyError;
-use lofty::file::AudioFile as _;
 use lofty::file::TaggedFileExt as _;
-use lofty::io::FileLike;
-use lofty::tag::ItemKey;
-use sqlite::Cursor;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
 use walkdir::WalkDir;
@@ -150,7 +144,7 @@ where
 
 			let mut lrc_fetch_worker_handles = JoinSet::new();
 
-			while let Some(mut tagged_file) = tagged_rx.recv().await {
+			while let Some(tagged_file) = tagged_rx.recv().await {
 				let lrc_tx = lrc_tx.clone();
 
 				// First, attempt to get lyrics from the database...

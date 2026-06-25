@@ -1,12 +1,10 @@
 use std::fmt;
 use std::sync::Arc;
 
-use lofty::file::TaggedFile;
 use pretty_type_name::pretty_type_name;
 
 use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
-use crate::lyrics::TagData;
 use crate::lyrics::TaggedFileData;
 use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceResult;

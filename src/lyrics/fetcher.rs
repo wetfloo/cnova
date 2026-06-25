@@ -1,5 +1,4 @@
 use crate::lyrics::Lyrics;
-use crate::lyrics::TagData;
 use crate::lyrics::TaggedFileData;
 use crate::lyrics::service;
 use crate::lyrics::service::LyricsServiceError;

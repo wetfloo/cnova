@@ -1,4 +1,3 @@
-use crate::lyrics::Lyrics;
 use crate::lyrics::TaggedFileData;
 
 pub(crate) type DbConnection = sqlite::Connection;

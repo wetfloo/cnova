@@ -2,12 +2,10 @@ mod lrclib;
 
 use std::fmt;
 use std::pin::Pin;
-use std::sync::LazyLock;
 
 pub(crate) use lrclib::LrclibLyricsFetchService;
 
 use crate::lyrics::Lyrics;
-use crate::lyrics::TagData;
 use crate::lyrics::TaggedFileData;
 
 pub(crate) type LyricsServiceResult =
