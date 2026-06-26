@@ -40,31 +40,31 @@ pub(super) enum GuessFileError {
 	Io(#[from] std::io::Error),
 }
 
-pub(super) async fn lurk_and_tag<I, P, DB>(paths: I, db_path: DB) -> anyhow::Result<()>
+pub(super) async fn lurk_and_tag<I, P>(
+	paths: I,
+	mut db_cache: DbCache,
+	http_client: reqwest::Client,
+) -> anyhow::Result<()>
 where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
-	DB: AsRef<Path> + 'static,
 {
 	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel::<ChanUntagged>();
 	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<ChanTagged>();
 	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<ChanTaggedWithLyrics>();
 
-	let lrc_fetcher: LazyLock<Arc<_>> = LazyLock::new(|| {
-		// TODO: use this client for more services, outside of just LRCLIB
-		let http_client: Arc<_> = reqwest::Client::new().into();
+	// TODO: add more lyrics services and use this ref counter there.
+	let http_client: Arc<_> = http_client.into();
 
-		let lrclib_service = LrclibLyricsFetchService::new(http_client.clone());
-
-		let out = LyricsFetcherBuilder::new(Box::new(lrclib_service))
-			.build()
-			.into();
-		log::debug!("initialized lyrics fetcher {:?}", out);
-
-		out
-	});
-
-	let mut db_cache = sqlite::Connection::open(&db_path).and_then(DbCache::new)?;
+	let lrc_fetcher = LyricsFetcherBuilder::new(Box::new(LrclibLyricsFetchService::new(
+		http_client.clone(),
+	)))
+	.build();
+	log::debug!(
+		"initialized lyrics fetcher {:?}",
+		lrc_fetcher,
+	);
+	let lrc_fetcher: Arc<_> = lrc_fetcher.into();
 
 	let mut join_set = JoinSet::new();
 
