@@ -235,14 +235,12 @@ mod test {
 	use crate::lyrics::db::DbCacheLyricsError;
 	use crate::lyrics::db::queries;
 
-	macro_rules! init_cache {
-		() => {{
-			let res = sqlite::Connection::open(":memory:").and_then(DbCache::new);
+	fn init_cache() -> DbCache {
+		let res = sqlite::Connection::open(":memory:").and_then(DbCache::new);
 
-			assert_matches!(res, Ok(_));
+		assert_matches!(res, Ok(_));
 
-			res.expect("we've just verified that this value is Ok")
-		}};
+		res.expect("we've just verified that this value is Ok")
 	}
 
 	mod test_data {
@@ -269,7 +267,7 @@ mod test {
 
 	#[test]
 	fn test_insert_and_get_twice() {
-		let mut cache = init_cache!();
+		let mut cache = init_cache();
 
 		let tag_data = TagData {
 			artist: Some((test_data::artist(1)).into()),
@@ -309,7 +307,7 @@ mod test {
 
 	#[test]
 	fn test_insert_two_and_get() {
-		let mut cache = init_cache!();
+		let mut cache = init_cache();
 
 		let tag_data = TagData {
 			artist: Some(test_data::artist(1).into()),
