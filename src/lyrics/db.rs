@@ -74,6 +74,7 @@ impl DbCache {
 		statement: &mut sqlite::Statement,
 		tagged_file_data: &TaggedFileData,
 	) -> Result<Option<(String, i64)>, DbCacheLyricsError> {
+		// Necessary for repeated calls.
 		statement.reset()?;
 
 		statement.bind((
@@ -249,33 +250,58 @@ mod test {
 		}};
 	}
 
+	mod test_data {
+		use std::time::Duration;
+
+		pub(super) const ARTIST: &str = "test artist";
+		pub(super) const ALBUM: &str = "test album";
+		pub(super) const TITLE: &str = "test title";
+		pub(super) const DURATION: Duration = Duration::from_secs(42);
+
+		pub(super) const LYRICS: &str = "test lyrics";
+	}
+
 	#[test]
-	fn test_init_empty() {
+	fn test_insert_and_get_twice() {
 		let mut cache = init_cache!();
 
 		let tag_data = TagData {
-			artist: Some(Cow::Owned(
-				"artist goes here".to_owned(),
-			)),
-			album: Some(Cow::Owned("album goes here".to_owned())),
-			title: Some(Cow::Owned("title goes here".to_owned())),
+			artist: Some(Cow::Owned(test_data::ARTIST.into())),
+			album: Some(Cow::Owned(test_data::ALBUM.into())),
+			title: Some(Cow::Owned(test_data::TITLE.into())),
 		};
 		let tagged_file_data = TaggedFileData {
 			tag_data,
-			duration: Duration::from_secs(42),
+			duration: test_data::DURATION,
 		};
 
 		assert_matches!(
 			cache.insert_lrc(
 				&tagged_file_data,
-				Lyrics::Synced("test".to_owned()),
+				Lyrics::Synced(test_data::LYRICS.into()),
 			),
 			Ok(()),
+			"must be able to insert values into the database",
 		);
-
-		assert_matches!(
-			cache.get_lrc(&tagged_file_data),
-			Ok(Some(Lyrics::Synced(_))),
+		assert_eq!(
+			cache
+				.get_lrc(&tagged_file_data)
+				.ok()
+				.flatten(),
+			Some(Lyrics::Synced(
+				test_data::LYRICS.to_owned(),
+			)),
+			"must be able to get track metadata from the database",
+		);
+		assert_eq!(
+			cache
+				.get_lrc(&tagged_file_data)
+				.ok()
+				.flatten(),
+			Some(Lyrics::Synced(
+				test_data::LYRICS.to_owned(),
+			)),
+			"must be able to get the same track metadata from the database repeatedly",
 		);
 	}
 }
