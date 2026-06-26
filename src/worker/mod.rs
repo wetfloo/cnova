@@ -142,7 +142,7 @@ where
 	join_set.spawn_local_on(
 		async move {
 			// TODO: accept configuration to open the database in different locations
-			let mut db_cache = sqlite::Connection::open(":memory:")
+			let mut db_cache = sqlite::Connection::open("cnova.db")
 				.and_then(DbCache::new)
 				// TODO::error_handling remove unwrap
 				.unwrap();
