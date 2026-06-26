@@ -19,7 +19,10 @@ lto = "thin"
 openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
+# keep-sorted start
+clap = { version = "4.6", features = ["derive", "cargo"] }
 const_format = "0.2"
+cross-xdg = "2.1"
 lofty = "0.24"
 ouroboros = "0.18"
 pretty-type-name = "1.0"
@@ -33,3 +36,4 @@ thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
 wetutil = "0.3"
+# keep-sorted end
