@@ -209,15 +209,7 @@ pub(super) mod queries {
 	";
 
 	pub(super) const INSERT_LRC: &str = "\
-		INSERT INTO lrc (
-			lyrics, \
-			artist, \
-			album, \
-			title, \
-			duration_secs, \
-			timestamp, \
-			status\
-		) VALUES (\
+		INSERT INTO lrc VALUES (\
 			:lyrics, \
 			:artist, \
 			:album, \
