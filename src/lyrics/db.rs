@@ -316,7 +316,7 @@ mod test {
 			album: Some(test_data::album(1).into()),
 			title: Some(test_data::title(1).into()),
 		};
-		let tagged_file_data = TaggedFileData {
+		let tagged_file_data_1 = TaggedFileData {
 			tag_data,
 			duration: test_data::duration(1),
 		};
@@ -332,8 +332,8 @@ mod test {
 
 		assert_matches!(
 			cache.insert_lrc(
-				&tagged_file_data,
-				Lyrics::Synced(test_data::lyrics(2)),
+				&tagged_file_data_1,
+				Lyrics::Synced(test_data::lyrics(1)),
 			),
 			Ok(()),
 			"must be able to insert values into the database",
@@ -348,15 +348,15 @@ mod test {
 		);
 		assert_eq!(
 			cache
-				.get_lrc(&tagged_file_data)
+				.get_lrc(&tagged_file_data_1)
 				.ok()
 				.flatten(),
-			Some(Lyrics::Synced(test_data::lyrics(2))),
+			Some(Lyrics::Synced(test_data::lyrics(1))),
 			"must be able to get track metadata from the database",
 		);
 		assert_eq!(
 			cache
-				.get_lrc(&tagged_file_data)
+				.get_lrc(&tagged_file_data_2)
 				.ok()
 				.flatten(),
 			Some(Lyrics::Synced(test_data::lyrics(2))),
