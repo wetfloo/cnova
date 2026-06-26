@@ -17,9 +17,9 @@ pub(crate) trait LyricsFetchService: fmt::Debug {
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum LyricsServiceError {
-	#[error("failed a network request")]
+	#[error("failed a network request with {:?}", .0)]
 	Network(#[source] reqwest::Error),
-	#[error("failed to parse")]
+	#[error("failed to parse, with {:?}", .0)]
 	Parse(#[source] reqwest::Error),
 	#[error("unknown error")]
 	Unknown,

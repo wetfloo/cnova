@@ -16,7 +16,7 @@ pub(crate) struct LrclibLyricsFetchService {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LrclibLyricsResponse {
-	id: u64,
+	id: Option<u64>,
 	track_name: String,
 	artist_name: String,
 	album_name: String,

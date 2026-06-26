@@ -237,6 +237,7 @@ dependencies = [
  "cross-xdg",
  "env_logger",
  "lofty",
+ "log",
  "openssl",
  "ouroboros",
  "pretty-type-name",

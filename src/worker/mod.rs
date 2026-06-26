@@ -40,7 +40,7 @@ pub(super) enum GuessFileError {
 	Io(#[from] std::io::Error),
 }
 
-pub(super) async fn lurk_and_tag<I, P, DB>(paths: I, db_path: DB)
+pub(super) async fn lurk_and_tag<I, P, DB>(paths: I, db_path: DB) -> anyhow::Result<()>
 where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
@@ -56,10 +56,15 @@ where
 
 		let lrclib_service = LrclibLyricsFetchService::new(http_client.clone());
 
-		LyricsFetcherBuilder::new(Box::new(lrclib_service))
+		let out = LyricsFetcherBuilder::new(Box::new(lrclib_service))
 			.build()
-			.into()
+			.into();
+		log::debug!("initialized lyrics fetcher {:?}", out);
+
+		out
 	});
+
+	let mut db_cache = sqlite::Connection::open(&db_path).and_then(DbCache::new)?;
 
 	let mut join_set = JoinSet::new();
 
@@ -112,12 +117,6 @@ where
 	let db_local_set = tokio::task::LocalSet::new();
 	join_set.spawn_local_on(
 		async move {
-			// TODO: accept configuration to open the database in different locations
-			let mut db_cache = sqlite::Connection::open(&db_path)
-				.and_then(DbCache::new)
-				// TODO::error_handling remove unwrap
-				.unwrap();
-
 			let mut lrc_fetch_worker_handles = JoinSet::new();
 
 			while let Some(tagged_file) = tagged_rx.recv().await {
@@ -165,10 +164,9 @@ where
 
 					Ok(Err(errors)) => {
 						// TODO::logging
-						//
-						// TODO::error_handling consider streaming service errors via channels
-						// instead of collecting them into Vec.
-						dbg!(errors);
+						for e in errors {
+							log::error!("{}", e);
+						}
 					},
 
 					Err(e) => {
@@ -231,6 +229,8 @@ where
 			dbg!(e);
 		}
 	}
+
+	Ok(())
 }
 
 /// Traverse `paths` recursively,

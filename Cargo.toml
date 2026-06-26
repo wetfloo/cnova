@@ -26,6 +26,7 @@ const_format = "0.2"
 cross-xdg = "2.1"
 env_logger = "0.11"
 lofty = "0.24"
+log = { version = "0.4", features = ["release_max_level_info"] }
 ouroboros = "0.18"
 pretty-type-name = "1.0"
 rand = "0.10"
