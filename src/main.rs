@@ -6,13 +6,10 @@ mod cli;
 mod lyrics;
 mod worker;
 
-use std::env::home_dir;
 use std::fs::create_dir_all;
 
-use anyhow::anyhow;
 use clap::Parser;
 use const_format::formatcp;
-use tokio::fs::create_dir;
 
 use crate::cli::Cli;
 use crate::lyrics::db::DbCache;

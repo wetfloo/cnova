@@ -1,11 +1,8 @@
 mod tag_types;
 
-use std::error::Error;
-use std::fmt;
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use lofty::config::WriteOptions;
 use lofty::error::LoftyError;
@@ -16,7 +13,6 @@ use walkdir::WalkDir;
 use wetutil::prelude::*;
 
 use crate::lyrics::Lyrics;
-use crate::lyrics::TaggedFileData;
 use crate::lyrics::db::DbCache;
 use crate::lyrics::fetcher::LyricsFetcherBuilder;
 use crate::lyrics::service::LrclibLyricsFetchService;

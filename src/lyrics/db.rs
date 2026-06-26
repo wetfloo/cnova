@@ -1,5 +1,4 @@
 use std::fmt;
-use std::time;
 use std::time::SystemTime;
 use std::time::SystemTimeError;
 use std::time::UNIX_EPOCH;

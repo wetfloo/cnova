@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use clap::ValueEnum;
 use clap::crate_name;
 use clap::value_parser;
 
