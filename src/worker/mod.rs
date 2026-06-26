@@ -255,7 +255,7 @@ fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
 
 /// Traverse `paths` recursively,
 /// sending any file (not a directory!) to `tx`.
-pub(super) fn traverse<TX, I, P>(tx: &TX, paths: I)
+fn traverse<TX, I, P>(tx: &TX, paths: I)
 where
 	TX: UnboundedTx<Item = ChanUntagged>,
 	I: IntoIterator<Item = P>,
