@@ -26,6 +26,9 @@ type ChanUntagged = walkdir::DirEntry;
 type ChanTagged = TaggedFile;
 type ChanTaggedWithLyrics = (Lyrics, TaggedFile);
 
+const CHANNEL_SEND_EXPECT_MSG: &str =
+	"couldn't send the value to the channel. did someone close it?";
+
 #[derive(Debug, thiserror::Error)]
 pub(super) enum GuessFileError {
 	#[error("Unsupported file type: {}", .0)]
@@ -91,7 +94,9 @@ where
 					.and_then(handle_file_guessing)
 				{
 					Ok(tagged_file) => {
-						tagged_tx.send(tagged_file);
+						tagged_tx
+							.send(tagged_file)
+							.expect(CHANNEL_SEND_EXPECT_MSG);
 					},
 					Err(guess_err) => {
 						// TODO::logging
@@ -121,7 +126,9 @@ where
 				// First, attempt to get lyrics from the database...
 				match db_cache.get_lrc(&(&tagged_file).into()) {
 					Ok(Some(v)) => {
-						lrc_tx.send((v, tagged_file));
+						lrc_tx
+							.send((v, tagged_file))
+							.expect(CHANNEL_SEND_EXPECT_MSG);
 						// ...if that worked, move on.
 						continue;
 					},
@@ -155,7 +162,9 @@ where
 							dbg!(e);
 						}
 
-						lrc_tx.send((lyrics, tagged_file));
+						lrc_tx
+							.send((lyrics, tagged_file))
+							.expect(CHANNEL_SEND_EXPECT_MSG);
 					},
 
 					Ok(Err(errors)) => {

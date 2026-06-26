@@ -123,7 +123,7 @@ impl DbCache {
 	) -> Result<(), DbCacheLyricsError> {
 		// Necessary for repeated calls.
 		// Yes, even for inserts.
-		statement.reset();
+		statement.reset()?;
 
 		statement.bind((
 			":lyrics",
@@ -223,16 +223,11 @@ pub(super) mod queries {
 #[cfg(test)]
 mod test {
 	use std::assert_matches;
-	use std::borrow::Cow;
-	use std::fmt::format;
-	use std::time::Duration;
 
 	use crate::lyrics::Lyrics;
 	use crate::lyrics::TagData;
 	use crate::lyrics::TaggedFileData;
 	use crate::lyrics::db::DbCache;
-	use crate::lyrics::db::DbCacheLyricsError;
-	use crate::lyrics::db::queries;
 
 	fn init_cache() -> DbCache {
 		let res = sqlite::Connection::open(":memory:").and_then(DbCache::new);
