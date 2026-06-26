@@ -122,6 +122,8 @@ impl DbCache {
 		tagged_file_data: &TaggedFileData,
 		lyrics: Lyrics,
 	) -> Result<(), DbCacheLyricsError> {
+		// Necessary for repeated calls.
+		// Yes, even for inserts.
 		statement.reset();
 
 		statement.bind((
@@ -231,6 +233,7 @@ pub(super) mod queries {
 mod test {
 	use std::assert_matches;
 	use std::borrow::Cow;
+	use std::fmt::format;
 	use std::time::Duration;
 
 	use crate::lyrics::Lyrics;
@@ -251,14 +254,25 @@ mod test {
 	}
 
 	mod test_data {
+		use std::fmt;
 		use std::time::Duration;
 
-		pub(super) const ARTIST: &str = "test artist";
-		pub(super) const ALBUM: &str = "test album";
-		pub(super) const TITLE: &str = "test title";
-		pub(super) const DURATION: Duration = Duration::from_secs(42);
+		pub(super) fn artist(index: impl fmt::Display) -> String {
+			format!("test artist {}", index)
+		}
+		pub(super) fn album(index: impl fmt::Display) -> String {
+			format!("test album {}", index)
+		}
+		pub(super) fn title(index: impl fmt::Display) -> String {
+			format!("test title {}", index)
+		}
+		pub(super) const fn duration(index: u8) -> Duration {
+			Duration::from_secs(42 * (index as u64))
+		}
 
-		pub(super) const LYRICS: &str = "test lyrics";
+		pub(super) fn lyrics(index: impl fmt::Display) -> String {
+			format!("test lyrics {}", index)
+		}
 	}
 
 	#[test]
@@ -266,19 +280,19 @@ mod test {
 		let mut cache = init_cache!();
 
 		let tag_data = TagData {
-			artist: Some(Cow::Owned(test_data::ARTIST.into())),
-			album: Some(Cow::Owned(test_data::ALBUM.into())),
-			title: Some(Cow::Owned(test_data::TITLE.into())),
+			artist: Some((test_data::artist(1)).into()),
+			album: Some((test_data::album(1)).into()),
+			title: Some((test_data::title(1)).into()),
 		};
 		let tagged_file_data = TaggedFileData {
 			tag_data,
-			duration: test_data::DURATION,
+			duration: test_data::duration(1),
 		};
 
 		assert_matches!(
 			cache.insert_lrc(
 				&tagged_file_data,
-				Lyrics::Synced(test_data::LYRICS.into()),
+				Lyrics::Synced(test_data::lyrics(1)),
 			),
 			Ok(()),
 			"must be able to insert values into the database",
@@ -288,9 +302,7 @@ mod test {
 				.get_lrc(&tagged_file_data)
 				.ok()
 				.flatten(),
-			Some(Lyrics::Synced(
-				test_data::LYRICS.to_owned(),
-			)),
+			Some(Lyrics::Synced(test_data::lyrics(1))),
 			"must be able to get track metadata from the database",
 		);
 		assert_eq!(
@@ -298,10 +310,65 @@ mod test {
 				.get_lrc(&tagged_file_data)
 				.ok()
 				.flatten(),
-			Some(Lyrics::Synced(
-				test_data::LYRICS.to_owned(),
-			)),
+			Some(Lyrics::Synced(test_data::lyrics(1))),
 			"must be able to get the same track metadata from the database repeatedly",
+		);
+	}
+
+	#[test]
+	fn test_insert_two_and_get() {
+		let mut cache = init_cache!();
+
+		let tag_data = TagData {
+			artist: Some(test_data::artist(1).into()),
+			album: Some(test_data::album(1).into()),
+			title: Some(test_data::title(1).into()),
+		};
+		let tagged_file_data = TaggedFileData {
+			tag_data,
+			duration: test_data::duration(1),
+		};
+		let tag_data_2 = TagData {
+			artist: Some(test_data::artist(2).into()),
+			album: Some(test_data::album(2).into()),
+			title: Some(test_data::title(2).into()),
+		};
+		let tagged_file_data_2 = TaggedFileData {
+			tag_data: tag_data_2,
+			duration: test_data::duration(2),
+		};
+
+		assert_matches!(
+			cache.insert_lrc(
+				&tagged_file_data,
+				Lyrics::Synced(test_data::lyrics(2)),
+			),
+			Ok(()),
+			"must be able to insert values into the database",
+		);
+		assert_matches!(
+			cache.insert_lrc(
+				&tagged_file_data_2,
+				Lyrics::Synced(test_data::lyrics(2)),
+			),
+			Ok(()),
+			"must be able to insert values into the database",
+		);
+		assert_eq!(
+			cache
+				.get_lrc(&tagged_file_data)
+				.ok()
+				.flatten(),
+			Some(Lyrics::Synced(test_data::lyrics(2))),
+			"must be able to get track metadata from the database",
+		);
+		assert_eq!(
+			cache
+				.get_lrc(&tagged_file_data)
+				.ok()
+				.flatten(),
+			Some(Lyrics::Synced(test_data::lyrics(2))),
+			"must be able to get track metadata from the database",
 		);
 	}
 }
