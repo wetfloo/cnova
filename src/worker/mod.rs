@@ -150,7 +150,6 @@ where
 				// First, attempt to get lyrics from the database...
 				match db_cache.get_lrc(&(&tagged_file).into()) {
 					Ok(Some(v)) => {
-						// TODO: send actual lyrics instead of just wrapping String
 						lrc_tx.send((v, tagged_file));
 						// ...if that worked, move on.
 						continue;
