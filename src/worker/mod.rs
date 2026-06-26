@@ -129,7 +129,12 @@ where
 			});
 		}
 
-		tagging_worker_handles.join_all().await;
+		while let Some(join_res) = tagging_worker_handles.join_next().await {
+			if let Err(e) = join_res {
+				// TDOO::logging
+				dbg!(e);
+			}
+		}
 	});
 
 	// Step 3: use file tags to request lyrics.
@@ -183,9 +188,18 @@ where
 				});
 			}
 
-			lrc_fetch_worker_handles
-				.join_all()
-				.await;
+			while let Some(join_res) = lrc_fetch_worker_handles
+				.join_next()
+				.await
+			{
+				match join_res {
+					Ok(v) => todo!(),
+					Err(e) => {
+						// TODO::logging
+						dbg!(e);
+					},
+				}
+			}
 		},
 		&db_local_set,
 	);
@@ -228,11 +242,21 @@ where
 			});
 		}
 
-		writing_worker_handles.join_all().await;
+		while let Some(join_res) = writing_worker_handles.join_next().await {
+			if let Err(e) = join_res {
+				// TDOO::logging
+				dbg!(e);
+			}
+		}
 	});
 
 	db_local_set.await;
-	join_set.join_all().await;
+	while let Some(join_res) = join_set.join_next().await {
+		if let Err(e) = join_res {
+			// TDOO::logging
+			dbg!(e);
+		}
+	}
 }
 
 /// Traverse `paths` recursively,
