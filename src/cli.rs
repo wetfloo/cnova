@@ -14,8 +14,7 @@ pub(crate) struct Cli {
 	#[arg(required = true)]
 	pub paths: Vec<PathBuf>,
 
-	/// How many simultaneous downloads will occur at the same time. The default value is selected
-	/// to not, hopefully, overwhelm the website with traffic
+	/// How many simultaneous network requests will occur at the same time.
 	#[arg(
         short = 'j',
         long,
@@ -24,12 +23,13 @@ pub(crate) struct Cli {
     )]
 	pub download_jobs: u16,
 
-	/// How many threads will be spawn to process the files. 0 corresponds to the amount of
-	/// available system threads
+	/// How many threads will be spawn to process the files.
+	/// 1 is useful for HDDs.
+	/// 0 allows the async runtime to spawn as many threads as possible.
 	#[arg(short = 'J', long, default_value_t = 0)]
 	pub traversal_jobs: u16,
 
-	/// Proxy setting, supports SOCKS5, SOCKS4 and HTTP proxies
+	/// Proxy setting, supporting SOCKS5, SOCKS4 and HTTP proxies.
 	#[arg(short, long, value_parser = proxy)]
 	pub proxy: Option<reqwest::Proxy>,
 }
