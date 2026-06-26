@@ -161,7 +161,7 @@ where
 					},
 					Ok(None) => (),
 					Err(e) => {
-						// TODO::logging add logging here
+						// TODO::logging
 						dbg!(e);
 					},
 				}
@@ -170,21 +170,10 @@ where
 				let lrc_fetcher = lrc_fetcher.clone();
 
 				lrc_fetch_worker_handles.spawn(async move {
-					let tagged_file_data: TaggedFileData = (&tagged_file).into();
-					// TODO: write lyrics to the database
-					match lrc_fetcher
-						.request_lyrics(&tagged_file_data)
+					lrc_fetcher
+						.request_lyrics(&(&tagged_file).into())
 						.await
-					{
-						Ok(v) => {
-							lrc_tx.send((v, tagged_file));
-						},
-
-						Err(e) => {
-							// TODO::logging
-							dbg!(e);
-						},
-					}
+						.map(|lyrics| (lyrics, tagged_file))
 				});
 			}
 
@@ -193,7 +182,24 @@ where
 				.await
 			{
 				match join_res {
-					Ok(v) => todo!(),
+					Ok(Ok((lyrics, tagged_file))) => {
+						if let Err(e) = db_cache.insert_lrc(&(&tagged_file).into(), lyrics.clone())
+						{
+							// TODO::logging
+							dbg!(e);
+						}
+
+						lrc_tx.send((lyrics, tagged_file));
+					},
+
+					Ok(Err(errors)) => {
+						// TODO::logging
+						//
+						// TODO::error_handling consider streaming service errors via channels
+						// instead of collecting them into Vec.
+						dbg!(errors);
+					},
+
 					Err(e) => {
 						// TODO::logging
 						dbg!(e);
@@ -232,12 +238,9 @@ where
 					}
 				}
 
-				match tagged_file.save(WriteOptions::default()) {
-					Ok(_) => (),
-					Err(e) => {
-						// TODO::logging
-						dbg!(e);
-					},
+				if let Err(e) = tagged_file.save(WriteOptions::default()) {
+					// TODO::logging
+					dbg!(e);
 				}
 			});
 		}
