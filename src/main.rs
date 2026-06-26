@@ -2,6 +2,7 @@
 #![allow(unused)]
 #![deny(unreachable_pub)]
 
+mod cli;
 mod lyrics;
 mod worker;
 

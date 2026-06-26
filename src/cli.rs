@@ -1,0 +1,39 @@
+use std::path::PathBuf;
+
+use clap::Parser;
+use clap::ValueEnum;
+use clap::crate_name;
+use clap::value_parser;
+
+#[derive(Debug, Parser)]
+#[command(name = crate_name!(), version, about)]
+pub(crate) struct Cli {
+	/// Paths to scan. Could be a mix files or directories. If it's a directory, this program will
+	/// traverse it recursively and download lyrics, reporting any errors along the way.
+	/// If it's a file, will download a corresponding lyrics for it and update that file.
+	#[arg(required = true)]
+	pub paths: Vec<PathBuf>,
+
+	/// How many simultaneous downloads will occur at the same time. The default value is selected
+	/// to not, hopefully, overwhelm the website with traffic
+	#[arg(
+        short = 'j',
+        long,
+        default_value_t = 5,
+        value_parser = value_parser!(u16).range(1..),
+    )]
+	pub download_jobs: u16,
+
+	/// How many threads will be spawn to process the files. 0 corresponds to the amount of
+	/// available system threads
+	#[arg(short = 'J', long, default_value_t = 0)]
+	pub traversal_jobs: u16,
+
+	/// Proxy setting, supports SOCKS5, SOCKS4 and HTTP proxies
+	#[arg(short, long, value_parser = proxy)]
+	pub proxy: Option<reqwest::Proxy>,
+}
+
+fn proxy(s: &str) -> Result<reqwest::Proxy, String> {
+	reqwest::Proxy::all(s).map_err(|_| format!("invalid proxy string: {}", s))
+}
