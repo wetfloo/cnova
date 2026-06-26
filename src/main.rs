@@ -8,14 +8,19 @@ mod worker;
 
 use std::env::home_dir;
 
+use clap::Parser;
+
+use crate::cli::Cli;
+
 #[tokio::main]
-async fn main() {
-	let mut paths = Vec::new();
+async fn main() -> anyhow::Result<()> {
+	let base_dirs = cross_xdg::BaseDirs::with_prefix(env!("CARGO_CRATE_NAME"))?;
+	let cli = Cli::parse();
 
-	let mut path = home_dir().unwrap();
-	path.push("Music/Experiment");
+	let mut db_path = base_dirs.cache_home().to_owned();
+	db_path.push("cache.db");
 
-	paths.push(path);
+	worker::lurk_and_tag(cli.paths, db_path);
 
-	worker::lurk_and_tag(paths);
+	Ok(())
 }

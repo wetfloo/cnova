@@ -70,10 +70,14 @@ pub(super) enum GuessFileError {
 	Io(#[from] std::io::Error),
 }
 
-pub(super) async fn lurk_and_tag<I, P>(paths: I)
+pub(super) async fn lurk_and_tag<I, P, DB>(
+	paths: I,
+	db_path: DB,
+)
 where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
+	DB: AsRef<Path> + 'static,
 {
 	let (untagged_tx, mut untagged_rx) = tokio_unbounded_channel::<ChanUntagged>();
 	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<ChanTagged>();
@@ -142,7 +146,7 @@ where
 	join_set.spawn_local_on(
 		async move {
 			// TODO: accept configuration to open the database in different locations
-			let mut db_cache = sqlite::Connection::open("cnova.db")
+			let mut db_cache = sqlite::Connection::open(&db_path)
 				.and_then(DbCache::new)
 				// TODO::error_handling remove unwrap
 				.unwrap();
