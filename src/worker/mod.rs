@@ -236,23 +236,6 @@ where
 	join_set.join_all().await;
 }
 
-fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
-	// TODO::config: add a way to make lofty guess (or not) track's filetype.
-	lofty::probe::Probe::new(file)
-		.guess_file_type()?
-		.read_bound()
-		.err_into()
-		.and_then(|tagged_file| {
-			match tagged_file.file_type() {
-				// Do not support custom file types, since we wouldn't be able to write
-				// those tags anyway. Also, it gets rid of "non-music" file problem
-				// (.jpg, .png, .lrc, etc.).
-				lofty::file::FileType::Custom(ft) => Err(GuessFileError::InvalidFileType(ft)),
-				_ => Ok(tagged_file),
-			}
-		})
-}
-
 /// Traverse `paths` recursively,
 /// sending any file (not a directory!) to `tx`.
 fn traverse<TX, I, P>(tx: &TX, paths: I)
@@ -275,4 +258,21 @@ where
 			tx.send(entry_path).unwrap();
 		}
 	}
+}
+
+fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
+	// TODO::config: add a way to make lofty guess (or not) track's filetype.
+	lofty::probe::Probe::new(file)
+		.guess_file_type()?
+		.read_bound()
+		.err_into()
+		.and_then(|tagged_file| {
+			match tagged_file.file_type() {
+				// Do not support custom file types, since we wouldn't be able to write
+				// those tags anyway. Also, it gets rid of "non-music" file problem
+				// (.jpg, .png, .lrc, etc.).
+				lofty::file::FileType::Custom(ft) => Err(GuessFileError::InvalidFileType(ft)),
+				_ => Ok(tagged_file),
+			}
+		})
 }
