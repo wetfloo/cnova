@@ -1,5 +1,5 @@
 // TODO: remove when we're done.
-#![allow(unused)]
+#![allow(dead_code)]
 #![deny(unreachable_pub)]
 
 mod cli;
