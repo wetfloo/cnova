@@ -25,40 +25,10 @@ use crate::worker::tag_types::TagTypesToWriteExt as _;
 type StdFile = std::fs::File;
 type TaggedFile = lofty::file::BoundTaggedFile<StdFile>;
 
+type Sender<T> = tokio::sync::mpsc::UnboundedSender<T>;
 type ChanUntagged = walkdir::DirEntry;
 type ChanTagged = TaggedFile;
 type ChanTaggedWithLyrics = (Lyrics, TaggedFile);
-
-pub(super) trait UnboundedTx {
-	type Item;
-	type Err: SendError<Self::Item>;
-
-	fn send(&self, message: Self::Item) -> Result<(), Self::Err>;
-}
-
-impl<T> UnboundedTx for tokio::sync::mpsc::UnboundedSender<T> {
-	type Item = T;
-	type Err = tokio::sync::mpsc::error::SendError<Self::Item>;
-
-	fn send(&self, message: Self::Item) -> Result<(), Self::Err> {
-		self.send(message)
-	}
-}
-
-impl<T> UnboundedTx for std::sync::mpsc::Sender<T> {
-	type Item = T;
-	type Err = std::sync::mpsc::SendError<Self::Item>;
-
-	fn send(&self, message: Self::Item) -> Result<(), Self::Err> {
-		self.send(message)
-	}
-}
-
-pub(super) trait SendError<T>: fmt::Debug + fmt::Display + Error {}
-
-impl<T> SendError<T> for tokio::sync::mpsc::error::SendError<T> {}
-
-impl<T> SendError<T> for std::sync::mpsc::SendError<T> {}
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum GuessFileError {
@@ -70,10 +40,7 @@ pub(super) enum GuessFileError {
 	Io(#[from] std::io::Error),
 }
 
-pub(super) async fn lurk_and_tag<I, P, DB>(
-	paths: I,
-	db_path: DB,
-)
+pub(super) async fn lurk_and_tag<I, P, DB>(paths: I, db_path: DB)
 where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
@@ -268,9 +235,8 @@ where
 
 /// Traverse `paths` recursively,
 /// sending any file (not a directory!) to `tx`.
-fn traverse<TX, I, P>(tx: &TX, paths: I)
+fn traverse<I, P>(tx: &Sender<ChanUntagged>, paths: I)
 where
-	TX: UnboundedTx<Item = ChanUntagged>,
 	I: IntoIterator<Item = P>,
 	P: AsRef<Path>,
 {
