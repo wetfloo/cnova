@@ -57,8 +57,17 @@ async fn main() -> anyhow::Result<()> {
 		.unwrap_or_else(num_cpus::get);
 	let disk_io_semaphore = tokio::sync::Semaphore::new(disk_io_permits).into();
 	log::debug!(
-		"initalized disk io semaphore with {} permits",
-		disk_io_permits
+		"initalized {} with {} permits",
+		stringify!(disk_io_semaphore),
+		disk_io_permits,
+	);
+
+	let net_io_permits = cli.download_jobs.into();
+	let net_io_semaphore = tokio::sync::Semaphore::new(net_io_permits).into();
+	log::debug!(
+		"initalized {} with {} permits",
+		stringify!(net_io_semaphore),
+		net_io_permits,
 	);
 
 	worker::lurk_and_tag(
@@ -66,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
 		db_cache,
 		http_client,
 		disk_io_semaphore,
+		net_io_semaphore,
 	)
 	.await?;
 

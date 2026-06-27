@@ -30,6 +30,7 @@ type ChanTaggedWithLyrics = (Lyrics, TaggedFile);
 const CHANNEL_SEND_EXPECT_MSG: &str =
 	"couldn't send the value to the channel. did someone close it?";
 const DISK_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire disk_io_semaphore, was it dropped?";
+const NET_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire net_io_semaphore, was it dropped?";
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum GuessFileError {
@@ -46,6 +47,7 @@ pub(super) async fn lurk_and_tag<I, P>(
 	mut db_cache: DbCache,
 	http_client: reqwest::Client,
 	disk_io_semaphore: Arc<tokio::sync::Semaphore>,
+	net_io_semaphore: Arc<tokio::sync::Semaphore>,
 ) -> anyhow::Result<()>
 where
 	I: IntoIterator<Item = P> + Send + 'static,
@@ -144,6 +146,7 @@ where
 
 	// Step 3: use file tags to request lyrics.
 	let db_local_set = tokio::task::LocalSet::new();
+	let net_io_semaphore_step_3 = net_io_semaphore.clone();
 	join_set.spawn_local_on(
 		async move {
 			let mut lrc_fetch_worker_handles = JoinSet::new();
@@ -170,7 +173,13 @@ where
 				// ...if it didn't work, get/init network lyrics fetcher.
 				let lrc_fetcher = lrc_fetcher.clone();
 
+				let net_io_semaphore_step_3 = net_io_semaphore_step_3.clone();
 				lrc_fetch_worker_handles.spawn(async move {
+					let _permit = net_io_semaphore_step_3
+						.acquire_owned()
+						.await
+						.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+
 					lrc_fetcher
 						.request_lyrics(&(&tagged_file).into())
 						.await
