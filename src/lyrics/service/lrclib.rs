@@ -21,7 +21,7 @@ struct LrclibLyricsResponse {
 	artist_name: String,
 	album_name: String,
 	/// Duration of a song in seconds.
-	duration: u64,
+	duration: f64,
 	instrumental: bool,
 	plain_lyrics: String,
 	synced_lyrics: String,
@@ -60,7 +60,7 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 		let duration = &data.duration.as_secs().to_string();
 		params.push(("duration", duration));
 
-		let url = reqwest::Url::parse_with_params("https://lrclib.net/api/get/", params).expect(
+		let url = reqwest::Url::parse_with_params("https://lrclib.net/api/get", params).expect(
 			"since we typed this url by hand without user input, we expect it to always parse correctly",
 		);
 
