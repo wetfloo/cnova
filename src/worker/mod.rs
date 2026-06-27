@@ -9,6 +9,7 @@ use lofty::error::LoftyError;
 use lofty::file::TaggedFileExt as _;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
+use tokio::task::spawn_blocking;
 use walkdir::WalkDir;
 use wetutil::prelude::*;
 
@@ -28,6 +29,7 @@ type ChanTaggedWithLyrics = (Lyrics, TaggedFile);
 
 const CHANNEL_SEND_EXPECT_MSG: &str =
 	"couldn't send the value to the channel. did someone close it?";
+const DISK_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire disk_io_semaphore, was it dropped?";
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum GuessFileError {
@@ -43,6 +45,7 @@ pub(super) async fn lurk_and_tag<I, P>(
 	paths: I,
 	mut db_cache: DbCache,
 	http_client: reqwest::Client,
+	disk_io_semaphore: Arc<tokio::sync::Semaphore>,
 ) -> anyhow::Result<()>
 where
 	I: IntoIterator<Item = P> + Send + 'static,
@@ -71,14 +74,39 @@ where
 	//
 	// Walk the file structure in a separate task,
 	// without blocking tokio's executors for async tasks.
-	join_set.spawn_blocking(move || traverse(&untagged_tx, paths));
+	let disk_io_semaphore_step_1 = disk_io_semaphore.clone();
+	join_set.spawn(async move {
+		// It's okay to not use the permit for anything,
+		// because we just need to drop it to release it
+		// after we're done with directory traversal.
+		let _permit = disk_io_semaphore_step_1
+			.acquire_owned()
+			.await
+			.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+
+		let join_res = spawn_blocking(move || {
+			traverse(&untagged_tx, paths);
+		})
+		.await;
+		if let Err(join_err) = join_res {
+			// TODO::logging
+			dbg!(join_err);
+		}
+	});
 
 	// Step 2: read file tags, when possible.
+	let disk_io_semaphore_step_2 = disk_io_semaphore.clone();
 	join_set.spawn(async move {
 		let mut tagging_worker_handles = JoinSet::new();
 
 		while let Some(dir_entry) = untagged_rx.recv().await {
+			let disk_io_semaphore_step_2 = disk_io_semaphore_step_2.clone();
+			let _permit = disk_io_semaphore_step_2
+				.acquire_owned()
+				.await
+				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 			let tagged_tx = tagged_tx.clone();
+
 			// TODO::perf consider using rayon's thread pool
 			// instead of spawning a task for every file.
 			tagging_worker_handles.spawn_blocking(move || {
@@ -185,10 +213,17 @@ where
 	);
 
 	// Step 4: write lyrics tags back to files.
+	let disk_io_semaphore_step_4 = disk_io_semaphore.clone();
 	join_set.spawn(async move {
 		let mut writing_worker_handles = JoinSet::new();
 
 		while let Some((lyrics, tagged_file)) = lrc_rx.recv().await {
+			let disk_io_semaphore_step_4 = disk_io_semaphore_step_4.clone();
+			let _permit = disk_io_semaphore_step_4
+				.acquire_owned()
+				.await
+				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+
 			writing_worker_handles.spawn_blocking(move || {
 				let mut tagged_file = tagged_file;
 

@@ -7,6 +7,7 @@ mod lyrics;
 mod worker;
 
 use std::fs::create_dir_all;
+use std::num::NonZero;
 
 use clap::Parser;
 use const_format::formatcp;
@@ -51,7 +52,22 @@ async fn main() -> anyhow::Result<()> {
 
 	log::trace!("successfully initialized all the basics, ready to lurk (and tag)");
 
-	worker::lurk_and_tag(cli.paths, db_cache, http_client).await?;
+	let disk_io_permits = NonZero::new(cli.traversal_jobs)
+		.map(|non_zero| non_zero.get().into())
+		.unwrap_or_else(num_cpus::get);
+	let disk_io_semaphore = tokio::sync::Semaphore::new(disk_io_permits).into();
+	log::debug!(
+		"initalized disk io semaphore with {} permits",
+		disk_io_permits
+	);
+
+	worker::lurk_and_tag(
+		cli.paths,
+		db_cache,
+		http_client,
+		disk_io_semaphore,
+	)
+	.await?;
 
 	Ok(())
 }
