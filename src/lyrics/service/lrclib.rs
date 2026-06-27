@@ -17,14 +17,20 @@ pub(crate) struct LrclibLyricsFetchService {
 #[serde(rename_all = "camelCase")]
 struct LrclibLyricsResponse {
 	id: Option<u64>,
-	track_name: String,
-	artist_name: String,
-	album_name: String,
+	track_name: Option<String>,
+	artist_name: Option<String>,
+	album_name: Option<String>,
 	/// Duration of a song in seconds.
-	duration: f64,
+	duration: Option<f64>,
+	#[serde(default = "default_instrumental")]
 	instrumental: bool,
-	plain_lyrics: String,
-	synced_lyrics: String,
+	plain_lyrics: Option<String>,
+	synced_lyrics: Option<String>,
+}
+
+#[inline]
+fn default_instrumental() -> bool {
+	false
 }
 
 impl LrclibLyricsFetchService {
@@ -83,19 +89,11 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 
 impl From<LrclibLyricsResponse> for Lyrics {
 	fn from(value: LrclibLyricsResponse) -> Self {
-		if value.instrumental {
-			return Self::Instrumental;
-		}
-
-		let LrclibLyricsResponse {
-			synced_lyrics,
-			plain_lyrics,
-			..
-		} = value;
-		if !synced_lyrics.trim().is_empty() {
-			Self::Synced(synced_lyrics)
-		} else {
-			Self::Unsynced(plain_lyrics)
-		}
+		value
+			.synced_lyrics
+			.map(Lyrics::Synced)
+			.or_else(|| value.plain_lyrics.map(Lyrics::Unsynced))
+			.filter(|_| !value.instrumental)
+			.unwrap_or(Lyrics::Instrumental)
 	}
 }
