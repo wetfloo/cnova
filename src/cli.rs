@@ -11,7 +11,7 @@ pub(crate) struct Cli {
 	/// traverse it recursively and download lyrics, reporting any errors along the way.
 	/// If it's a file, will download a corresponding lyrics for it and update that file.
 	#[arg(required = true)]
-	pub paths: Vec<PathBuf>,
+	pub(crate) paths: Vec<PathBuf>,
 
 	/// How many simultaneous network requests will occur at the same time.
 	#[arg(
@@ -20,17 +20,17 @@ pub(crate) struct Cli {
         default_value_t = 5,
         value_parser = value_parser!(u16).range(1..),
     )]
-	pub download_jobs: u16,
+	pub(crate) download_jobs: u16,
 
 	/// How many threads will be spawn to process the files.
 	/// 1 is useful for HDDs.
 	/// 0 allows the async runtime to spawn as many threads as possible.
 	#[arg(short = 'J', long, default_value_t = 0)]
-	pub traversal_jobs: u16,
+	pub(crate) traversal_jobs: u16,
 
 	/// Proxy setting, supporting SOCKS5, SOCKS4 and HTTP proxies.
 	#[arg(short, long, value_parser = proxy)]
-	pub proxy: Option<reqwest::Proxy>,
+	pub(crate) proxy: Option<reqwest::Proxy>,
 }
 
 fn proxy(s: &str) -> Result<reqwest::Proxy, String> {
