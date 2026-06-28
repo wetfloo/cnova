@@ -112,25 +112,13 @@ where
 			// TODO::perf consider using rayon's thread pool
 			// instead of spawning a task for every file.
 			tagging_worker_handles.spawn_blocking(move || {
-				let path = dir_entry.into_path();
-				let file_res = OpenOptions::new()
-					.read(true)
-					.write(true)
-					.create(false)
-					.open(&path);
-
-				match file_res
-					.err_into()
-					.and_then(handle_file_guessing)
-				{
-					Ok(tagged_file) => {
-						tagged_tx
-							.send(tagged_file)
-							.expect(CHANNEL_SEND_EXPECT_MSG);
-					},
-					Err(guess_err) => {
+				match load_file_tags(dir_entry.path()) {
+					Ok(tagged_file) => tagged_tx
+						.send(tagged_file)
+						.expect(CHANNEL_SEND_EXPECT_MSG),
+					Err(e) => {
 						// TODO::logging
-						dbg!(guess_err);
+						dbg!(e);
 					},
 				}
 			});
@@ -283,8 +271,8 @@ where
 }
 
 /// Traverse `paths` recursively,
-/// sending any file (not a directory!) to `tx`.
-fn traverse<I, P>(tx: &Sender<ChanUntagged>, paths: I)
+/// sending any file (not a directory!) to `untagged_tx`.
+fn traverse<I, P>(untagged_tx: &Sender<ChanUntagged>, paths: I)
 where
 	I: IntoIterator<Item = P>,
 	P: AsRef<Path>,
@@ -300,17 +288,27 @@ where
 		{
 			// TODO::error_handling: remove unwrap,
 			// (replace with `expect` that the channel will never be closed?)
-			tx.send(entry_path).unwrap();
+			untagged_tx.send(entry_path).unwrap();
 		}
 	}
 }
 
-fn handle_file_guessing(file: StdFile) -> Result<TaggedFile, GuessFileError> {
-	// TODO::config: add a way to make lofty guess (or not) track's filetype.
-	lofty::probe::Probe::new(file)
-		.guess_file_type()?
-		.read_bound()
+fn load_file_tags<P>(path: P) -> Result<TaggedFile, GuessFileError>
+where
+	P: AsRef<Path>,
+{
+	OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create(false)
+		.open(path.as_ref())
 		.err_into()
+		.and_then(|file| {
+			lofty::probe::Probe::new(file)
+				.guess_file_type()?
+				.read_bound()
+				.err_into()
+		})
 		.and_then(|tagged_file| {
 			match tagged_file.file_type() {
 				// Do not support custom file types, since we wouldn't be able to write
