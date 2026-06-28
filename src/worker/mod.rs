@@ -14,6 +14,7 @@ use walkdir::WalkDir;
 use wetutil::prelude::*;
 
 use crate::lyrics::Lyrics;
+use crate::lyrics::TaggedFileData;
 use crate::lyrics::db::DbCache;
 use crate::lyrics::fetcher::LyricsFetcherBuilder;
 use crate::lyrics::service::LrclibLyricsFetchService;
@@ -186,7 +187,10 @@ where
 					},
 
 					Ok(None) => {
-						log::debug!("couldn't find a value inside a db cache");
+						log::debug!(
+							"couldn't find lyrics for track {} inside a db cache",
+							tagged_file_data,
+						);
 					},
 
 					Err(e) => {
@@ -222,6 +226,11 @@ where
 				match join_res {
 					Ok(Ok((lyrics, tagged_file))) => {
 						let tagged_file_data = (&tagged_file).into();
+						log::info!(
+							"successfully found lyrics data for {}",
+							tagged_file_data
+						);
+
 						if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
 							log::warn!(
 								r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
@@ -253,7 +262,7 @@ where
 	// Step 4: write lyrics tags back to files.
 	let disk_io_semaphore_step_4 = disk_io_semaphore.clone();
 	join_set.spawn(async move {
-		let mut writing_worker_handles = JoinSet::new();
+		let mut writing_worker_handles = JoinSet::<lofty::error::Result<()>>::new();
 
 		while let Some((lyrics, mut tagged_file)) = lrc_rx.recv().await {
 			let disk_io_semaphore_step_4 = disk_io_semaphore_step_4.clone();
@@ -263,8 +272,16 @@ where
 				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 			log::trace!("acquired a permit for step 4");
 
-			writing_worker_handles
-				.spawn_blocking(move || update_file_lyrics_tag(&mut tagged_file, &lyrics));
+			writing_worker_handles.spawn_blocking(move || {
+				update_file_lyrics_tag(&mut tagged_file, &lyrics)?;
+
+				let tagged_file_data: TaggedFileData = (&tagged_file).into();
+				log::info!(
+					"successfully wrote tags for {}",
+					tagged_file_data,
+				);
+				Ok(())
+			});
 		}
 
 		while let Some(join_res) = writing_worker_handles.join_next().await {

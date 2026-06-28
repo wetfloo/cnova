@@ -29,6 +29,7 @@ impl Lyrics {
 	}
 }
 
+// TODO: remove this type, it makes no sense to keep it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TaggedFileData<'a> {
 	pub(crate) tag_data: TagData<'a>,
