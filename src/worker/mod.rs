@@ -211,7 +211,7 @@ where
 				.await
 				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 
-			writing_worker_handles.spawn_blocking(move || something(&mut tagged_file, lyrics));
+			writing_worker_handles.spawn_blocking(move || something(&mut tagged_file, &lyrics));
 		}
 
 		while let Some(join_res) = writing_worker_handles.join_next().await {
@@ -293,18 +293,17 @@ where
 		})
 }
 
-fn something(tagged_file: &mut TaggedFile, lyrics: Lyrics) -> lofty::error::Result<()> {
+fn something(tagged_file: &mut TaggedFile, lyrics: &Lyrics) -> lofty::error::Result<()> {
 	for tag_type in tagged_file.tag_types_to_write() {
 		if let Some(tag) = tagged_file.tag_mut(tag_type) {
 			use lofty::tag::ItemKey as K;
 
-			// TODO::perf remove this cloning
-			match lyrics.to_owned() {
+			match lyrics {
 				Lyrics::Synced(lrc) => {
-					tag.insert_text(K::Lyrics, lrc);
+					tag.insert_text(K::Lyrics, lrc.to_owned());
 				},
 				Lyrics::Unsynced(lrc) => {
-					tag.insert_text(K::UnsyncLyrics, lrc);
+					tag.insert_text(K::UnsyncLyrics, lrc.to_owned());
 				},
 				Lyrics::Instrumental => {
 					tag.remove_key(K::Lyrics);
