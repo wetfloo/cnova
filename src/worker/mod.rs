@@ -2,6 +2,7 @@ mod tag_types;
 
 use std::fs::OpenOptions;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use lofty::config::WriteOptions;
@@ -24,7 +25,7 @@ type StdFile = std::fs::File;
 type TaggedFile = lofty::file::BoundTaggedFile<StdFile>;
 
 type Sender<T> = tokio::sync::mpsc::UnboundedSender<T>;
-type ChanUntagged = walkdir::DirEntry;
+type ChanUntagged = PathBuf;
 type ChanTagged = TaggedFile;
 type ChanTaggedWithLyrics = (Lyrics, TaggedFile);
 
@@ -104,11 +105,7 @@ where
 	join_set.spawn(async move {
 		let mut tagging_worker_handles = JoinSet::new();
 
-		while let Some(path) = untagged_rx
-			.recv()
-			.await
-			.map(|dir_entry| dir_entry.into_path())
-		{
+		while let Some(path) = untagged_rx.recv().await {
 			let disk_io_semaphore_step_2 = disk_io_semaphore_step_2.clone();
 			let _permit = disk_io_semaphore_step_2
 				.acquire_owned()
@@ -311,14 +308,15 @@ where
 	for path in paths {
 		for entry_path in WalkDir::new(&path)
 			.into_iter()
-			.consume_err(|err| {
+			.consume_err(|e| {
 				log::warn!(
 					r#"failed to traverse path {:?} due to error "{}""#,
 					path.as_ref(),
-					err,
+					e,
 				)
 			})
 			.filter(|dir_entry| dir_entry.file_type().is_file())
+			.map(|dir_entry| dir_entry.into_path())
 		{
 			untagged_tx
 				.send(entry_path)
@@ -363,8 +361,7 @@ where
 		.and_then(|tagged_file| {
 			match tagged_file.file_type() {
 				// Do not support custom file types, since we wouldn't be able to write
-				// those tags anyway. Also, it gets rid of "non-music" file problem
-				// (.jpg, .png, .lrc, etc.).
+				// those tags anyway.
 				lofty::file::FileType::Custom(ft) => Err(GuessFileError::InvalidFileType { ft }),
 				_ => Ok(tagged_file),
 			}
