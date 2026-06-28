@@ -85,6 +85,10 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 			Ok(response.into())
 		})
 	}
+
+	fn name(&self) -> &'static str {
+		"lrclib.net readonly service"
+	}
 }
 
 impl From<LrclibLyricsResponse> for Lyrics {

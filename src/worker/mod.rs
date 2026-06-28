@@ -19,6 +19,7 @@ use crate::lyrics::TaggedFileData;
 use crate::lyrics::db::DbCache;
 use crate::lyrics::fetcher::LyricsFetcherBuilder;
 use crate::lyrics::service::LrclibLyricsFetchService;
+use crate::lyrics::service::LyricsServiceAcquisitionValue;
 use crate::worker::tag_types::TagTypesToWriteExt as _;
 
 type StdFile = std::fs::File;
@@ -221,13 +222,21 @@ where
 				.await
 			{
 				match join_res {
-					Ok(Ok((lyrics, tagged_file))) => {
-						let tagged_file_data = (&tagged_file).into();
+					Ok(Ok((
+						LyricsServiceAcquisitionValue {
+							lyrics,
+							service_name,
+						},
+						tagged_file,
+					))) => {
+						let tagged_file_data: TaggedFileData = (&tagged_file).into();
 						log::info!(
-							"successfully found lyrics data for {}",
-							tagged_file_data
+							r#"service "{}" successfully found lyrics data for {}"#,
+							service_name,
+							tagged_file_data,
 						);
 
+						let tagged_file_data = (&tagged_file).into();
 						if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
 							log::warn!(
 								r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,

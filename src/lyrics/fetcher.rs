@@ -1,11 +1,10 @@
-use std::any::Any;
-
-use crate::lyrics::Lyrics;
 use crate::lyrics::TaggedFileData;
 use crate::lyrics::service;
+use crate::lyrics::service::LyricsServiceAcquisitionValue;
 use crate::lyrics::service::LyricsServiceError;
 
-pub(crate) type LyricsFetcherResult = Result<Lyrics, Vec<LyricsServiceError>>;
+pub(crate) type LyricsFetcherResult =
+	Result<LyricsServiceAcquisitionValue, Vec<LyricsServiceError>>;
 type LyricsFetchService = Box<dyn service::LyricsFetchService + Send + Sync + 'static>;
 
 #[derive(Default, Debug)]
@@ -24,15 +23,19 @@ impl LyricsFetcher {
 		let mut errors = Vec::with_capacity(0);
 
 		for service in self.services.iter() {
-			match service
-				.request_lyrics(data)
-				.await
-				.map_err(|inner| LyricsServiceError {
-					service: (**service).type_id(),
-					inner,
-				}) {
-				Ok(v) => return Ok(v),
-				Err(e) => errors.push(e),
+			match service.request_lyrics(data).await {
+				Ok(v) => {
+					return Ok(LyricsServiceAcquisitionValue {
+						lyrics: v,
+						service_name: service.name(),
+					});
+				},
+				Err(e) => {
+					errors.push(LyricsServiceError {
+						src_err: e,
+						service_name: service.name(),
+					});
+				},
 			}
 		}
 
