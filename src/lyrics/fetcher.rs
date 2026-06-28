@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::lyrics::Lyrics;
 use crate::lyrics::TaggedFileData;
 use crate::lyrics::service;
@@ -22,7 +24,13 @@ impl LyricsFetcher {
 		let mut errors = Vec::with_capacity(0);
 
 		for service in self.services.iter() {
-			match service.request_lyrics(data).await {
+			match service
+				.request_lyrics(data)
+				.await
+				.map_err(|inner| LyricsServiceError {
+					service: (**service).type_id(),
+					inner,
+				}) {
 				Ok(v) => return Ok(v),
 				Err(e) => errors.push(e),
 			}

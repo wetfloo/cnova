@@ -3,6 +3,7 @@ pub(crate) mod fetcher;
 pub(crate) mod service;
 
 use std::borrow::Cow;
+use std::fmt;
 use std::time::Duration;
 
 use lofty::file::AudioFile as _;
@@ -71,6 +72,12 @@ where
 	}
 }
 
+impl fmt::Display for TaggedFileData<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		<TagData as fmt::Display>::fmt(&self.tag_data, f)
+	}
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct TagData<'a> {
 	pub(crate) artist: Option<Cow<'a, str>>,
@@ -89,5 +96,17 @@ where
 			album: value.album(),
 			title: value.title(),
 		}
+	}
+}
+
+impl fmt::Display for TagData<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			r#"track "{}" by "{}" in album "{}""#,
+			self.artist.as_deref().unwrap_or("?"),
+			self.artist.as_deref().unwrap_or("?"),
+			self.album.as_deref().unwrap_or("?"),
+		)
 	}
 }

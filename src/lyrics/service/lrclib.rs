@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use pretty_type_name::pretty_type_name;
 
-use super::LyricsServiceError;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TaggedFileData;
 use crate::lyrics::service::LyricsFetchService;
+use crate::lyrics::service::LyricsServiceErrorInner;
 use crate::lyrics::service::LyricsServiceResult;
 
 pub(crate) struct LrclibLyricsFetchService {
@@ -77,10 +77,10 @@ impl LyricsFetchService for LrclibLyricsFetchService {
 				.get(url)
 				.send()
 				.await
-				.map_err(LyricsServiceError::Network)?
+				.map_err(LyricsServiceErrorInner::Network)?
 				.json()
 				.await
-				.map_err(LyricsServiceError::Parse)?;
+				.map_err(LyricsServiceErrorInner::Parse)?;
 
 			Ok(response.into())
 		})

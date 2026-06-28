@@ -32,6 +32,18 @@ const CHANNEL_SEND_EXPECT_MSG: &str =
 const DISK_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire disk_io_semaphore, was it dropped?";
 const NET_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire net_io_semaphore, was it dropped?";
 
+macro_rules! join_fail_error {
+	() => {{
+		::log::error!("failed to join a task");
+	}};
+	($err:expr$(,)?) => {{
+		::log::error!(
+			r#"failed to join a task with error "{}""#,
+			$err,
+		);
+	}};
+}
+
 pub(super) async fn lurk_and_tag<I, P>(
 	paths: I,
 	mut db_cache: DbCache,
@@ -75,14 +87,14 @@ where
 			.acquire_owned()
 			.await
 			.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+		log::trace!("acquired a permit for step 1");
 
 		let join_res = spawn_blocking(move || {
 			traverse(&untagged_tx, paths);
 		})
 		.await;
-		if let Err(join_err) = join_res {
-			// TODO::logging
-			dbg!(join_err);
+		if let Err(e) = join_res {
+			join_fail_error!(e);
 		}
 	});
 
@@ -91,33 +103,54 @@ where
 	join_set.spawn(async move {
 		let mut tagging_worker_handles = JoinSet::new();
 
-		while let Some(dir_entry) = untagged_rx.recv().await {
+		while let Some(path) = untagged_rx
+			.recv()
+			.await
+			.map(|dir_entry| dir_entry.into_path())
+		{
 			let disk_io_semaphore_step_2 = disk_io_semaphore_step_2.clone();
 			let _permit = disk_io_semaphore_step_2
 				.acquire_owned()
 				.await
 				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+			log::trace!("acquired a permit for step 2");
 			let tagged_tx = tagged_tx.clone();
 
 			// TODO::perf consider using rayon's thread pool
 			// instead of spawning a task for every file.
-			tagging_worker_handles.spawn_blocking(move || {
-				match load_file_tags(dir_entry.path()) {
-					Ok(tagged_file) => tagged_tx
+			tagging_worker_handles.spawn_blocking(move || match load_file_tags(&path) {
+				Ok(tagged_file) => {
+					log::info!(
+						"successfully loaded file tags @ path {:?}",
+						path,
+					);
+
+					tagged_tx
 						.send(tagged_file)
-						.expect(CHANNEL_SEND_EXPECT_MSG),
-					Err(e) => {
-						// TODO::logging
-						dbg!(e);
-					},
-				}
+						.expect(CHANNEL_SEND_EXPECT_MSG);
+				},
+
+				Err(GuessFileError::InvalidFileType { ft }) => {
+					log::info!(
+						r#"file type "{}" not recognized @ path {:?}; skipping..."#,
+						ft,
+						path,
+					);
+				},
+
+				Err(e) => {
+					log::warn!(
+						r#"error "{}": failed to load file tags @ path {:?}; skipping..."#,
+						e,
+						path,
+					);
+				},
 			});
 		}
 
 		while let Some(join_res) = tagging_worker_handles.join_next().await {
 			if let Err(e) = join_res {
-				// TDOO::logging
-				dbg!(e);
+				join_fail_error!(e);
 			}
 		}
 	});
@@ -133,18 +166,34 @@ where
 				let lrc_tx = lrc_tx.clone();
 
 				// First, attempt to get lyrics from the database...
-				match db_cache.get_lrc(&(&tagged_file).into()) {
-					Ok(Some(v)) => {
+				let tagged_file_data = (&tagged_file).into();
+				log::trace!(
+					"reading lyrics for {:?} from the database...",
+					tagged_file_data,
+				);
+				match db_cache.get_lrc(&tagged_file_data) {
+					Ok(Some(lrc)) => {
+						log::info!(
+							"successfully loaded lyrics from cache for {}",
+							tagged_file_data,
+						);
+
 						lrc_tx
-							.send((v, tagged_file))
+							.send((lrc, tagged_file))
 							.expect(CHANNEL_SEND_EXPECT_MSG);
 						// ...if that worked, move on.
 						continue;
 					},
-					Ok(None) => (),
+
+					Ok(None) => {
+						log::debug!("couldn't find a value inside a db cache");
+					},
+
 					Err(e) => {
-						// TODO::logging
-						dbg!(e);
+						log::warn!(
+							r#"db cache interaction failed with error "{}""#,
+							e,
+						);
 					},
 				}
 
@@ -157,6 +206,7 @@ where
 						.acquire_owned()
 						.await
 						.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+					log::trace!("acquired a permit for step 3");
 
 					lrc_fetcher
 						.request_lyrics(&(&tagged_file).into())
@@ -171,10 +221,13 @@ where
 			{
 				match join_res {
 					Ok(Ok((lyrics, tagged_file))) => {
-						if let Err(e) = db_cache.insert_lrc(&(&tagged_file).into(), lyrics.clone())
-						{
-							// TODO::logging
-							dbg!(e);
+						let tagged_file_data = (&tagged_file).into();
+						if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
+							log::warn!(
+								r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
+								tagged_file_data,
+								e,
+							)
 						}
 
 						lrc_tx
@@ -182,16 +235,14 @@ where
 							.expect(CHANNEL_SEND_EXPECT_MSG);
 					},
 
-					Ok(Err(errors)) => {
-						// TODO::logging
-						for e in errors {
-							log::error!("{}", e);
+					Ok(Err(service_errors)) => {
+						for e in service_errors {
+							log::warn!(r#"lyrics service error "{}""#, e);
 						}
 					},
 
 					Err(e) => {
-						// TODO::logging
-						dbg!(e);
+						join_fail_error!(e);
 					},
 				}
 			}
@@ -210,14 +261,15 @@ where
 				.acquire_owned()
 				.await
 				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+			log::trace!("acquired a permit for step 4");
 
-			writing_worker_handles.spawn_blocking(move || update_file_lyrics_tag(&mut tagged_file, &lyrics));
+			writing_worker_handles
+				.spawn_blocking(move || update_file_lyrics_tag(&mut tagged_file, &lyrics));
 		}
 
 		while let Some(join_res) = writing_worker_handles.join_next().await {
 			if let Err(e) = join_res {
-				// TDOO::logging
-				dbg!(e);
+				join_fail_error!(e);
 			}
 		}
 	});
@@ -225,8 +277,7 @@ where
 	db_local_set.await;
 	while let Some(join_res) = join_set.join_next().await {
 		if let Err(e) = join_res {
-			// TDOO::logging
-			dbg!(e);
+			join_fail_error!(e);
 		}
 	}
 
@@ -244,22 +295,32 @@ where
 		for entry_path in WalkDir::new(&path)
 			.into_iter()
 			.consume_err(|err| {
-				// TODO::logging
-				dbg!(err);
+				log::warn!(
+					r#"failed to traverse path {:?} due to error "{}""#,
+					path.as_ref(),
+					err,
+				)
 			})
 			.filter(|dir_entry| dir_entry.file_type().is_file())
 		{
-			// TODO::error_handling: remove unwrap,
-			// (replace with `expect` that the channel will never be closed?)
-			untagged_tx.send(entry_path).unwrap();
+			untagged_tx
+				.send(entry_path)
+				.expect(CHANNEL_SEND_EXPECT_MSG);
 		}
+
+		log::info!(
+			"completed recursive path traversal @ {:?}",
+			path.as_ref()
+		);
 	}
 }
 
 #[derive(Debug, thiserror::Error)]
 enum GuessFileError {
-	#[error("Unsupported file type: {}", .0)]
-	InvalidFileType(&'static str),
+	#[error(r#"Unsupported file type: "{}""#, .ft)]
+	InvalidFileType {
+		ft: &'static str,
+	},
 	#[error(transparent)]
 	Lofty(#[from] LoftyError),
 	#[error(transparent)]
@@ -287,13 +348,16 @@ where
 				// Do not support custom file types, since we wouldn't be able to write
 				// those tags anyway. Also, it gets rid of "non-music" file problem
 				// (.jpg, .png, .lrc, etc.).
-				lofty::file::FileType::Custom(ft) => Err(GuessFileError::InvalidFileType(ft)),
+				lofty::file::FileType::Custom(ft) => Err(GuessFileError::InvalidFileType { ft }),
 				_ => Ok(tagged_file),
 			}
 		})
 }
 
-fn update_file_lyrics_tag(tagged_file: &mut TaggedFile, lyrics: &Lyrics) -> lofty::error::Result<()> {
+fn update_file_lyrics_tag(
+	tagged_file: &mut TaggedFile,
+	lyrics: &Lyrics,
+) -> lofty::error::Result<()> {
 	for tag_type in tagged_file.tag_types_to_write() {
 		if let Some(tag) = tagged_file.tag_mut(tag_type) {
 			use lofty::tag::ItemKey as K;
