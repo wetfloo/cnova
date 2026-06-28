@@ -32,16 +32,6 @@ const CHANNEL_SEND_EXPECT_MSG: &str =
 const DISK_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire disk_io_semaphore, was it dropped?";
 const NET_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire net_io_semaphore, was it dropped?";
 
-#[derive(Debug, thiserror::Error)]
-pub(super) enum GuessFileError {
-	#[error("Unsupported file type: {}", .0)]
-	InvalidFileType(&'static str),
-	#[error(transparent)]
-	Lofty(#[from] LoftyError),
-	#[error(transparent)]
-	Io(#[from] std::io::Error),
-}
-
 pub(super) async fn lurk_and_tag<I, P>(
 	paths: I,
 	mut db_cache: DbCache,
@@ -214,41 +204,14 @@ where
 	join_set.spawn(async move {
 		let mut writing_worker_handles = JoinSet::new();
 
-		while let Some((lyrics, tagged_file)) = lrc_rx.recv().await {
+		while let Some((lyrics, mut tagged_file)) = lrc_rx.recv().await {
 			let disk_io_semaphore_step_4 = disk_io_semaphore_step_4.clone();
 			let _permit = disk_io_semaphore_step_4
 				.acquire_owned()
 				.await
 				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 
-			writing_worker_handles.spawn_blocking(move || {
-				let mut tagged_file = tagged_file;
-
-				for tag_type in tagged_file.tag_types_to_write() {
-					if let Some(tag) = tagged_file.tag_mut(tag_type) {
-						use lofty::tag::ItemKey as K;
-
-						// TODO::perf don't clone this if it's not needed
-						match lyrics.clone() {
-							Lyrics::Synced(lrc) => {
-								tag.insert_text(K::Lyrics, lrc);
-							},
-							Lyrics::Unsynced(lrc) => {
-								tag.insert_text(K::UnsyncLyrics, lrc);
-							},
-							Lyrics::Instrumental => {
-								tag.remove_key(K::Lyrics);
-								tag.remove_key(K::UnsyncLyrics);
-							},
-						}
-					}
-				}
-
-				if let Err(e) = tagged_file.save(WriteOptions::default()) {
-					// TODO::logging
-					dbg!(e);
-				}
-			});
+			writing_worker_handles.spawn_blocking(move || something(&mut tagged_file, lyrics));
 		}
 
 		while let Some(join_res) = writing_worker_handles.join_next().await {
@@ -293,6 +256,16 @@ where
 	}
 }
 
+#[derive(Debug, thiserror::Error)]
+enum GuessFileError {
+	#[error("Unsupported file type: {}", .0)]
+	InvalidFileType(&'static str),
+	#[error(transparent)]
+	Lofty(#[from] LoftyError),
+	#[error(transparent)]
+	Io(#[from] std::io::Error),
+}
+
 fn load_file_tags<P>(path: P) -> Result<TaggedFile, GuessFileError>
 where
 	P: AsRef<Path>,
@@ -318,4 +291,28 @@ where
 				_ => Ok(tagged_file),
 			}
 		})
+}
+
+fn something(tagged_file: &mut TaggedFile, lyrics: Lyrics) -> lofty::error::Result<()> {
+	for tag_type in tagged_file.tag_types_to_write() {
+		if let Some(tag) = tagged_file.tag_mut(tag_type) {
+			use lofty::tag::ItemKey as K;
+
+			// TODO::perf remove this cloning
+			match lyrics.to_owned() {
+				Lyrics::Synced(lrc) => {
+					tag.insert_text(K::Lyrics, lrc);
+				},
+				Lyrics::Unsynced(lrc) => {
+					tag.insert_text(K::UnsyncLyrics, lrc);
+				},
+				Lyrics::Instrumental => {
+					tag.remove_key(K::Lyrics);
+					tag.remove_key(K::UnsyncLyrics);
+				},
+			}
+		}
+	}
+
+	tagged_file.save(WriteOptions::default())
 }
