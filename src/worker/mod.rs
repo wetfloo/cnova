@@ -211,7 +211,7 @@ where
 				.await
 				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 
-			writing_worker_handles.spawn_blocking(move || something(&mut tagged_file, &lyrics));
+			writing_worker_handles.spawn_blocking(move || update_file_lyrics_tag(&mut tagged_file, &lyrics));
 		}
 
 		while let Some(join_res) = writing_worker_handles.join_next().await {
@@ -293,7 +293,7 @@ where
 		})
 }
 
-fn something(tagged_file: &mut TaggedFile, lyrics: &Lyrics) -> lofty::error::Result<()> {
+fn update_file_lyrics_tag(tagged_file: &mut TaggedFile, lyrics: &Lyrics) -> lofty::error::Result<()> {
 	for tag_type in tagged_file.tag_types_to_write() {
 		if let Some(tag) = tagged_file.tag_mut(tag_type) {
 			use lofty::tag::ItemKey as K;
