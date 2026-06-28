@@ -259,7 +259,7 @@ where
 	// Step 4: write lyrics tags back to files.
 	let disk_io_semaphore_step_4 = disk_io_semaphore.clone();
 	join_set.spawn(async move {
-		let mut writing_worker_handles = JoinSet::<lofty::error::Result<()>>::new();
+		let mut writing_worker_handles: JoinSet<lofty::error::Result<_>> = JoinSet::new();
 
 		while let Some((lyrics, mut tagged_file)) = lrc_rx.recv().await {
 			let disk_io_semaphore_step_4 = disk_io_semaphore_step_4.clone();
