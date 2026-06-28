@@ -104,7 +104,7 @@ impl fmt::Display for TagData<'_> {
 		write!(
 			f,
 			r#"track "{}" by "{}" in album "{}""#,
-			self.artist.as_deref().unwrap_or("?"),
+			self.title.as_deref().unwrap_or("?"),
 			self.artist.as_deref().unwrap_or("?"),
 			self.album.as_deref().unwrap_or("?"),
 		)
