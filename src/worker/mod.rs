@@ -64,6 +64,8 @@ where
 	let (tagged_tx, mut tagged_rx) = tokio_unbounded_channel::<ChanTagged>();
 	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<ChanTaggedWithLyrics>();
 
+	let disk_io_semaphore: Arc<_> = disk_io_semaphore.into();
+
 	// TODO: add more lyrics services and use this ref counter there.
 	let http_client: Arc<_> = http_client.into();
 
@@ -77,9 +79,13 @@ where
 	);
 
 	let ((), (), (), ()) = tokio::join!(
-		step_1(paths, &disk_io_semaphore, untagged_tx),
+		step_1(
+			paths,
+			disk_io_semaphore.clone(),
+			untagged_tx,
+		),
 		step_2(
-			&disk_io_semaphore,
+			disk_io_semaphore.clone(),
 			&mut untagged_rx,
 			&tagged_tx,
 		),
@@ -90,7 +96,7 @@ where
 			&mut db_cache,
 			lrc_fetcher,
 		),
-		step_4(&disk_io_semaphore, &mut lrc_rx),
+		step_4(disk_io_semaphore.clone(), &mut lrc_rx),
 	);
 
 	Ok(())
@@ -196,16 +202,16 @@ fn update_file_lyrics_tag(
 ///
 /// Walk the file structure in a separate task,
 /// without blocking tokio's executors for async tasks.
-async fn step_1<I, P>(
-	paths: I,
-	disk_io_semaphore: &tokio::sync::Semaphore,
-	tx: Sender<ChanUntagged>,
-) where
+async fn step_1<I, P, S>(paths: I, disk_io_semaphore: S, tx: Sender<ChanUntagged>)
+where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
+	S: Into<Arc<tokio::sync::Semaphore>>,
 {
+	let disk_io_semaphore = disk_io_semaphore.into();
+
 	let permit = disk_io_semaphore
-		.acquire()
+		.acquire_owned()
 		.await
 		.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 	log::trace!(
@@ -214,8 +220,12 @@ async fn step_1<I, P>(
 	);
 
 	if let Err(e) = spawn_blocking(move || {
+		let _permit = permit;
 		// Once the function completes,
 		// we expect to be able to close the channel.
+		//
+		// TODO: make it so that it doesn't use the channel directly,
+		// returning an iterator instead.
 		traverse(tx, paths);
 	})
 	.await
@@ -225,59 +235,75 @@ async fn step_1<I, P>(
 }
 
 /// Step 2: read file tags, when possible.
-async fn step_2(
-	disk_io_semaphore: &tokio::sync::Semaphore,
-	rx: &mut Receiver<ChanUntagged>,
-	tx: &Sender<ChanTagged>,
-) {
-	let mut tagging_worker_handles = JoinSet::new();
+async fn step_2<S>(disk_io_semaphore: S, rx: &mut Receiver<ChanUntagged>, tx: &Sender<ChanTagged>)
+where
+	S: Into<Arc<tokio::sync::Semaphore>>,
+{
+	let disk_io_semaphore = disk_io_semaphore.into();
+
+	let mut worker_handles = JoinSet::new();
 
 	while let Some(path) = rx.recv().await {
-		let permit = disk_io_semaphore
-			.acquire()
-			.await
-			.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
-		log::trace!(
-			"acquired a permit ({:?}) for step 2",
-			permit,
-		);
+		let disk_io_semaphore = disk_io_semaphore.clone();
+		let tx = tx.clone();
 
-		tagging_worker_handles.spawn_blocking(move || (load_file_tags(&path), path));
+		// Need async context here to acquire tokio's semaphore.
+		worker_handles.spawn(async move {
+			let permit = disk_io_semaphore
+				.acquire_owned()
+				.await
+				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+			log::trace!(
+				"acquired a permit ({:?}) for step 2",
+				permit,
+			);
+
+			// TODO::perf consider using rayon's thread pool
+			// instead of spawning a task for every file.
+			match spawn_blocking(move || {
+				// Drops the permit when `fn load_file_tags` completes,
+				// so the other tasks are able to pick up the work.
+				let _permit = permit;
+				(load_file_tags(&path), path)
+			})
+			.await
+			{
+				Ok((Ok(tagged_file), path)) => {
+					log::info!(
+						"successfully loaded file tags @ path {:?}",
+						path,
+					);
+
+					tx.send(tagged_file)
+						.expect(CHANNEL_SEND_EXPECT_MSG);
+				},
+
+				Ok((Err(GuessFileError::InvalidFileType { ft }), path)) => {
+					log::info!(
+						r#"file type "{}" not recognized @ path {:?}; skipping..."#,
+						ft,
+						path,
+					);
+				},
+
+				Ok((Err(e), path)) => {
+					log::warn!(
+						r#"error "{}": failed to load file tags @ path {:?}; skipping..."#,
+						e,
+						path,
+					);
+				},
+
+				Err(e) => {
+					join_fail_error!(e);
+				},
+			}
+		});
 	}
 
-	// TODO::perf consider using rayon's thread pool
-	// instead of spawning a task for every file.
-	while let Some(join_res) = tagging_worker_handles.join_next().await {
-		match join_res {
-			Ok((Ok(tagged_file), path)) => {
-				log::info!(
-					"successfully loaded file tags @ path {:?}",
-					&path,
-				);
-
-				tx.send(tagged_file)
-					.expect(CHANNEL_SEND_EXPECT_MSG);
-			},
-
-			Ok((Err(GuessFileError::InvalidFileType { ft }), path)) => {
-				log::info!(
-					r#"file type "{}" not recognized @ path {:?}; skipping..."#,
-					ft,
-					path,
-				);
-			},
-
-			Ok((Err(e), path)) => {
-				log::warn!(
-					r#"error "{}": failed to load file tags @ path {:?}; skipping..."#,
-					e,
-					path,
-				);
-			},
-
-			Err(e) => {
-				join_fail_error!(e);
-			},
+	while let Some(join_res) = worker_handles.join_next().await {
+		if let Err(join_err) = join_res {
+			join_fail_error!(join_err);
 		}
 	}
 }
@@ -296,7 +322,7 @@ async fn step_3<S, L>(
 	let net_io_semaphore = net_io_semaphore.into();
 	let lrc_fetcher = lrc_fetcher.into();
 
-	let mut lrc_fetch_worker_handles = JoinSet::new();
+	let mut worker_handles = JoinSet::new();
 
 	while let Some(tagged_file) = rx.recv().await {
 		// First, attempt to get lyrics from the database...
@@ -336,8 +362,7 @@ async fn step_3<S, L>(
 		// ...if it didn't work, get/init network lyrics fetcher.
 		let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
 		let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
-
-		lrc_fetch_worker_handles.spawn(async move {
+		worker_handles.spawn(async move {
 			let permit = net_io_semaphore
 				.acquire_owned()
 				.await
@@ -354,10 +379,7 @@ async fn step_3<S, L>(
 		});
 	}
 
-	while let Some(join_res) = lrc_fetch_worker_handles
-		.join_next()
-		.await
-	{
+	while let Some(join_res) = worker_handles.join_next().await {
 		match join_res {
 			Ok(Ok((
 				LyricsServiceAcquisitionValue {
@@ -400,50 +422,55 @@ async fn step_3<S, L>(
 }
 
 /// Step 4: write lyrics tags back to files.
-async fn step_4(
-	disk_io_semaphore: &tokio::sync::Semaphore,
-	rx: &mut Receiver<ChanTaggedWithLyrics>,
-) {
-	let mut writing_worker_handles = JoinSet::new();
+async fn step_4<S>(disk_io_semaphore: S, rx: &mut Receiver<ChanTaggedWithLyrics>)
+where
+	S: Into<Arc<tokio::sync::Semaphore>>,
+{
+	let disk_io_semaphore = disk_io_semaphore.into();
+
+	let mut worker_handles = JoinSet::new();
 
 	while let Some((lyrics, mut tagged_file)) = rx.recv().await {
-		let permit = disk_io_semaphore
-			.acquire()
+		let disk_io_semaphore = disk_io_semaphore.clone();
+
+		worker_handles.spawn(async move {
+			let permit = disk_io_semaphore
+				.acquire_owned()
+				.await
+				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+			log::trace!(
+				"acquired a permit ({:?}) for step 4",
+				permit,
+			);
+
+			match spawn_blocking(move || {
+				let _permit = permit;
+				(
+					update_file_lyrics_tag(&mut tagged_file, &lyrics),
+					tagged_file,
+				)
+			})
 			.await
-			.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
-		log::trace!(
-			"acquired a permit ({:?}) for step 4",
-			permit,
-		);
-
-		writing_worker_handles.spawn_blocking(move || {
-			(
-				update_file_lyrics_tag(&mut tagged_file, &lyrics),
-				tagged_file,
-			)
+			{
+				Ok((Ok(()), tagged_file)) => {
+					let tagged_file_data: TaggedFileData = (&tagged_file).into();
+					log::info!(
+						"successfully wrote tags for {}",
+						tagged_file_data,
+					);
+				},
+				Ok((Err(e), tagged_file)) => {
+					let tagged_file_data: TaggedFileData = (&tagged_file).into();
+					log::warn!(
+						r#"failed to write tags for file {} with error "{}""#,
+						tagged_file_data,
+						e,
+					);
+				},
+				Err(join_err) => {
+					join_fail_error!(join_err);
+				},
+			}
 		});
-	}
-
-	while let Some(join_res) = writing_worker_handles.join_next().await {
-		match join_res {
-			Ok((Ok(()), tagged_file)) => {
-				let tagged_file_data: TaggedFileData = (&tagged_file).into();
-				log::info!(
-					"successfully wrote tags for {}",
-					tagged_file_data,
-				);
-			},
-			Ok((Err(e), tagged_file)) => {
-				let tagged_file_data: TaggedFileData = (&tagged_file).into();
-				log::warn!(
-					r#"failed to write tags for file {} with error "{}""#,
-					tagged_file_data,
-					e,
-				);
-			},
-			Err(join_err) => {
-				join_fail_error!(join_err);
-			},
-		}
 	}
 }
