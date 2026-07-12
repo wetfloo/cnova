@@ -93,7 +93,9 @@ where
 		log::trace!("acquired a permit for step 1");
 
 		let join_res = spawn_blocking(move || {
-			traverse(&untagged_tx, paths);
+			// once the function completes,
+			// we expect to be able to close the channel.
+			traverse(untagged_tx, paths);
 		})
 		.await;
 		if let Err(e) = join_res {
@@ -113,6 +115,7 @@ where
 				.await
 				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 			log::trace!("acquired a permit for step 2");
+
 			let tagged_tx = tagged_tx.clone();
 
 			// TODO::perf consider using rayon's thread pool
@@ -162,8 +165,6 @@ where
 			let mut lrc_fetch_worker_handles = JoinSet::new();
 
 			while let Some(tagged_file) = tagged_rx.recv().await {
-				let lrc_tx = lrc_tx.clone();
-
 				// First, attempt to get lyrics from the database...
 				let tagged_file_data = (&tagged_file).into();
 				log::trace!(
@@ -309,7 +310,7 @@ where
 
 /// Traverse `paths` recursively,
 /// sending any file (not a directory!) to `untagged_tx`.
-fn traverse<I, P>(untagged_tx: &Sender<ChanUntagged>, paths: I)
+fn traverse<I, P>(untagged_tx: Sender<ChanUntagged>, paths: I)
 where
 	I: IntoIterator<Item = P>,
 	P: AsRef<Path>,
