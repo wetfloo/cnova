@@ -75,26 +75,26 @@ where
 	);
 	let lrc_fetcher: Arc<_> = lrc_fetcher.into();
 
-	let (_s1, _s2, _s3, _s4) = tokio::join!(
+	let ((), (), (), ()) = tokio::join!(
 		{
 			// Step 1: discover all the files.
 			//
 			// Walk the file structure in a separate task,
 			// without blocking tokio's executors for async tasks.
-			let disk_io_semaphore_step_1 = disk_io_semaphore.clone();
+			let disk_io_semaphore_local = disk_io_semaphore.clone();
 
 			async move {
 				// It's okay to not use the permit for anything,
 				// because we just need to drop it to release it
 				// after we're done with directory traversal.
-				let _permit = disk_io_semaphore_step_1
+				let _permit = disk_io_semaphore_local
 					.acquire_owned()
 					.await
 					.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 				log::trace!("acquired a permit for step 1");
 
 				if let Err(e) = spawn_blocking(move || {
-					// once the function completes,
+					// Once the function completes,
 					// we expect to be able to close the channel.
 					traverse(untagged_tx, paths);
 				})
@@ -106,28 +106,29 @@ where
 		},
 		{
 			// Step 2: read file tags, when possible.
-			let disk_io_semaphore_step_2 = disk_io_semaphore.clone();
+			let disk_io_semaphore_local = disk_io_semaphore.clone();
 
 			async move {
 				let mut tagging_worker_handles = JoinSet::new();
 
 				while let Some(path) = untagged_rx.recv().await {
-					let disk_io_semaphore_step_2 = disk_io_semaphore_step_2.clone();
-					let _permit = disk_io_semaphore_step_2
-						.acquire_owned()
+					let _permit = disk_io_semaphore_local
+						.acquire()
 						.await
 						.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 					log::trace!("acquired a permit for step 2");
 
-					let tagged_tx = tagged_tx.clone();
+					tagging_worker_handles.spawn_blocking(move || (load_file_tags(&path), path));
+				}
 
-					// TODO::perf consider using rayon's thread pool
-					// instead of spawning a task for every file.
-					tagging_worker_handles.spawn_blocking(move || match load_file_tags(&path) {
-						Ok(tagged_file) => {
+				// TODO::perf consider using rayon's thread pool
+				// instead of spawning a task for every file.
+				while let Some(join_res) = tagging_worker_handles.join_next().await {
+					match join_res {
+						Ok((Ok(tagged_file), path)) => {
 							log::info!(
 								"successfully loaded file tags @ path {:?}",
-								path,
+								&path,
 							);
 
 							tagged_tx
@@ -135,7 +136,7 @@ where
 								.expect(CHANNEL_SEND_EXPECT_MSG);
 						},
 
-						Err(GuessFileError::InvalidFileType { ft }) => {
+						Ok((Err(GuessFileError::InvalidFileType { ft }), path)) => {
 							log::info!(
 								r#"file type "{}" not recognized @ path {:?}; skipping..."#,
 								ft,
@@ -143,26 +144,24 @@ where
 							);
 						},
 
-						Err(e) => {
+						Ok((Err(e), path)) => {
 							log::warn!(
 								r#"error "{}": failed to load file tags @ path {:?}; skipping..."#,
 								e,
 								path,
 							);
 						},
-					});
-				}
 
-				while let Some(join_res) = tagging_worker_handles.join_next().await {
-					if let Err(e) = join_res {
-						join_fail_error!(e);
+						Err(e) => {
+							join_fail_error!(e);
+						},
 					}
 				}
 			}
 		},
 		{
 			// Step 3: use file tags to request lyrics.
-			let net_io_semaphore_step_3 = net_io_semaphore.clone();
+			let net_io_semaphore_local = net_io_semaphore.clone();
 
 			async move {
 				let mut lrc_fetch_worker_handles = JoinSet::new();
@@ -206,10 +205,10 @@ where
 					// ...if it didn't work, get/init network lyrics fetcher.
 					let lrc_fetcher = lrc_fetcher.clone();
 
-					let net_io_semaphore_step_3 = net_io_semaphore_step_3.clone();
+					let net_io_semaphore_local = net_io_semaphore_local.clone();
 					lrc_fetch_worker_handles.spawn(async move {
-						let _permit = net_io_semaphore_step_3
-							.acquire_owned()
+						let _permit = net_io_semaphore_local
+							.acquire()
 							.await
 							.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 						log::trace!("acquired a permit for step 3");
@@ -260,8 +259,8 @@ where
 							}
 						},
 
-						Err(e) => {
-							join_fail_error!(e);
+						Err(join_err) => {
+							join_fail_error!(join_err);
 						},
 					}
 				}
@@ -269,34 +268,47 @@ where
 		},
 		{
 			// Step 4: write lyrics tags back to files.
-			let disk_io_semaphore_step_4 = disk_io_semaphore.clone();
+			let disk_io_semaphore_local = disk_io_semaphore.clone();
 
 			async move {
-				let mut writing_worker_handles: JoinSet<lofty::error::Result<_>> = JoinSet::new();
+				let mut writing_worker_handles = JoinSet::new();
 
 				while let Some((lyrics, mut tagged_file)) = lrc_rx.recv().await {
-					let disk_io_semaphore_step_4 = disk_io_semaphore_step_4.clone();
-					let _permit = disk_io_semaphore_step_4
+					let disk_io_semaphore_local = disk_io_semaphore_local.clone();
+					let _permit = disk_io_semaphore_local
 						.acquire_owned()
 						.await
 						.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
 					log::trace!("acquired a permit for step 4");
 
 					writing_worker_handles.spawn_blocking(move || {
-						update_file_lyrics_tag(&mut tagged_file, &lyrics)?;
-
-						let tagged_file_data: TaggedFileData = (&tagged_file).into();
-						log::info!(
-							"successfully wrote tags for {}",
-							tagged_file_data,
-						);
-						Ok(())
+						(
+							update_file_lyrics_tag(&mut tagged_file, &lyrics),
+							tagged_file,
+						)
 					});
 				}
 
 				while let Some(join_res) = writing_worker_handles.join_next().await {
-					if let Err(e) = join_res {
-						join_fail_error!(e);
+					match join_res {
+						Ok((Ok(()), tagged_file)) => {
+							let tagged_file_data: TaggedFileData = (&tagged_file).into();
+							log::info!(
+								"successfully wrote tags for {}",
+								tagged_file_data,
+							);
+						},
+						Ok((Err(e), tagged_file)) => {
+							let tagged_file_data: TaggedFileData = (&tagged_file).into();
+							log::warn!(
+								r#"failed to write tags for file {} with error "{}""#,
+								tagged_file_data,
+								e,
+							);
+						},
+						Err(join_err) => {
+							join_fail_error!(join_err);
+						},
 					}
 				}
 			}
@@ -358,7 +370,7 @@ where
 		.read(true)
 		.write(true)
 		.create(false)
-		.open(path.as_ref())
+		.open(&path)
 		.err_into()
 		.and_then(|file| {
 			lofty::probe::Probe::new(file)
