@@ -24,9 +24,10 @@ pub(crate) struct Cli {
 
 	/// How many threads will be spawn to process the files.
 	/// 1 is useful for HDDs.
-	/// 0 allows the async runtime to spawn as many threads as possible.
+	/// 0 will make the program automatically determine
+	/// the number of available CPUs of the current system.
 	#[arg(short = 'J', long, default_value_t = 0)]
-	pub(crate) traversal_jobs: u16,
+	pub(crate) processing_jobs: u16,
 
 	/// Proxy setting, supporting SOCKS5, SOCKS4 and HTTP proxies.
 	#[arg(short, long, value_parser = proxy)]

@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
 
 	log::trace!("successfully initialized all the basics, ready to lurk (and tag)");
 
-	let disk_io_permits = NonZero::new(cli.traversal_jobs)
+	let disk_io_permits = NonZero::new(cli.processing_jobs)
 		.map(|non_zero| non_zero.get().into())
 		.unwrap_or_else(num_cpus::get);
 	let disk_io_semaphore = tokio::sync::Semaphore::new(disk_io_permits).into();
