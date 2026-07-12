@@ -213,14 +213,13 @@ async fn step_1<I, P>(
 		permit,
 	);
 
-	if let Err(e) = {
-		spawn_blocking(move || {
-			// Once the function completes,
-			// we expect to be able to close the channel.
-			traverse(tx, paths);
-		})
-		.await
-	} {
+	if let Err(e) = spawn_blocking(move || {
+		// Once the function completes,
+		// we expect to be able to close the channel.
+		traverse(tx, paths);
+	})
+	.await
+	{
 		join_fail_error!(e);
 	}
 }
