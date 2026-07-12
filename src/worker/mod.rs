@@ -75,235 +75,233 @@ where
 	);
 	let lrc_fetcher: Arc<_> = lrc_fetcher.into();
 
-	let mut join_set = JoinSet::new();
+	let (_s1, _s2, _s3, _s4) = tokio::join!(
+		{
+			// Step 1: discover all the files.
+			//
+			// Walk the file structure in a separate task,
+			// without blocking tokio's executors for async tasks.
+			let disk_io_semaphore_step_1 = disk_io_semaphore.clone();
 
-	// Step 1: discover all the files.
-	//
-	// Walk the file structure in a separate task,
-	// without blocking tokio's executors for async tasks.
-	let disk_io_semaphore_step_1 = disk_io_semaphore.clone();
-	join_set.spawn(async move {
-		// It's okay to not use the permit for anything,
-		// because we just need to drop it to release it
-		// after we're done with directory traversal.
-		let _permit = disk_io_semaphore_step_1
-			.acquire_owned()
-			.await
-			.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
-		log::trace!("acquired a permit for step 1");
+			async move {
+				// It's okay to not use the permit for anything,
+				// because we just need to drop it to release it
+				// after we're done with directory traversal.
+				let _permit = disk_io_semaphore_step_1
+					.acquire_owned()
+					.await
+					.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+				log::trace!("acquired a permit for step 1");
 
-		let join_res = spawn_blocking(move || {
-			// once the function completes,
-			// we expect to be able to close the channel.
-			traverse(untagged_tx, paths);
-		})
-		.await;
-		if let Err(e) = join_res {
-			join_fail_error!(e);
-		}
-	});
-
-	// Step 2: read file tags, when possible.
-	let disk_io_semaphore_step_2 = disk_io_semaphore.clone();
-	join_set.spawn(async move {
-		let mut tagging_worker_handles = JoinSet::new();
-
-		while let Some(path) = untagged_rx.recv().await {
-			let disk_io_semaphore_step_2 = disk_io_semaphore_step_2.clone();
-			let _permit = disk_io_semaphore_step_2
-				.acquire_owned()
+				if let Err(e) = spawn_blocking(move || {
+					// once the function completes,
+					// we expect to be able to close the channel.
+					traverse(untagged_tx, paths);
+				})
 				.await
-				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
-			log::trace!("acquired a permit for step 2");
-
-			let tagged_tx = tagged_tx.clone();
-
-			// TODO::perf consider using rayon's thread pool
-			// instead of spawning a task for every file.
-			tagging_worker_handles.spawn_blocking(move || match load_file_tags(&path) {
-				Ok(tagged_file) => {
-					log::info!(
-						"successfully loaded file tags @ path {:?}",
-						path,
-					);
-
-					tagged_tx
-						.send(tagged_file)
-						.expect(CHANNEL_SEND_EXPECT_MSG);
-				},
-
-				Err(GuessFileError::InvalidFileType { ft }) => {
-					log::info!(
-						r#"file type "{}" not recognized @ path {:?}; skipping..."#,
-						ft,
-						path,
-					);
-				},
-
-				Err(e) => {
-					log::warn!(
-						r#"error "{}": failed to load file tags @ path {:?}; skipping..."#,
-						e,
-						path,
-					);
-				},
-			});
-		}
-
-		while let Some(join_res) = tagging_worker_handles.join_next().await {
-			if let Err(e) = join_res {
-				join_fail_error!(e);
-			}
-		}
-	});
-
-	// Step 3: use file tags to request lyrics.
-	let db_local_set = tokio::task::LocalSet::new();
-	let net_io_semaphore_step_3 = net_io_semaphore.clone();
-	join_set.spawn_local_on(
-		async move {
-			let mut lrc_fetch_worker_handles = JoinSet::new();
-
-			while let Some(tagged_file) = tagged_rx.recv().await {
-				// First, attempt to get lyrics from the database...
-				let tagged_file_data = (&tagged_file).into();
-				log::trace!(
-					"reading lyrics for {:?} from the database...",
-					tagged_file_data,
-				);
-				match db_cache.get_lrc(&tagged_file_data) {
-					Ok(Some(lrc)) => {
-						log::info!(
-							"successfully loaded lyrics from cache for {}",
-							tagged_file_data,
-						);
-
-						lrc_tx
-							.send((lrc, tagged_file))
-							.expect(CHANNEL_SEND_EXPECT_MSG);
-						// ...if that worked, move on.
-						continue;
-					},
-
-					Ok(None) => {
-						log::debug!(
-							"couldn't find lyrics for track {} inside a db cache",
-							tagged_file_data,
-						);
-					},
-
-					Err(e) => {
-						log::warn!(
-							r#"db cache interaction failed with error "{}""#,
-							e,
-						);
-					},
-				}
-
-				// ...if it didn't work, get/init network lyrics fetcher.
-				let lrc_fetcher = lrc_fetcher.clone();
-
-				let net_io_semaphore_step_3 = net_io_semaphore_step_3.clone();
-				lrc_fetch_worker_handles.spawn(async move {
-					let _permit = net_io_semaphore_step_3
-						.acquire_owned()
-						.await
-						.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
-					log::trace!("acquired a permit for step 3");
-
-					lrc_fetcher
-						.request_lyrics(&(&tagged_file).into())
-						.await
-						.map(|lyrics| (lyrics, tagged_file))
-				});
-			}
-
-			while let Some(join_res) = lrc_fetch_worker_handles
-				.join_next()
-				.await
-			{
-				match join_res {
-					Ok(Ok((
-						LyricsServiceAcquisitionValue {
-							lyrics,
-							service_name,
-						},
-						tagged_file,
-					))) => {
-						let tagged_file_data: TaggedFileData = (&tagged_file).into();
-						log::info!(
-							r#"service "{}" successfully found lyrics data for {}"#,
-							service_name,
-							tagged_file_data,
-						);
-
-						let tagged_file_data = (&tagged_file).into();
-						if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
-							log::warn!(
-								r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
-								tagged_file_data,
-								e,
-							)
-						}
-
-						lrc_tx
-							.send((lyrics, tagged_file))
-							.expect(CHANNEL_SEND_EXPECT_MSG);
-					},
-
-					Ok(Err(service_errors)) => {
-						for e in service_errors {
-							log::warn!(r#"lyrics service error "{}""#, e);
-						}
-					},
-
-					Err(e) => {
-						join_fail_error!(e);
-					},
+				{
+					join_fail_error!(e);
 				}
 			}
 		},
-		&db_local_set,
-	);
+		{
+			// Step 2: read file tags, when possible.
+			let disk_io_semaphore_step_2 = disk_io_semaphore.clone();
 
-	// Step 4: write lyrics tags back to files.
-	let disk_io_semaphore_step_4 = disk_io_semaphore.clone();
-	join_set.spawn(async move {
-		let mut writing_worker_handles: JoinSet<lofty::error::Result<_>> = JoinSet::new();
+			async move {
+				let mut tagging_worker_handles = JoinSet::new();
 
-		while let Some((lyrics, mut tagged_file)) = lrc_rx.recv().await {
-			let disk_io_semaphore_step_4 = disk_io_semaphore_step_4.clone();
-			let _permit = disk_io_semaphore_step_4
-				.acquire_owned()
-				.await
-				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
-			log::trace!("acquired a permit for step 4");
+				while let Some(path) = untagged_rx.recv().await {
+					let disk_io_semaphore_step_2 = disk_io_semaphore_step_2.clone();
+					let _permit = disk_io_semaphore_step_2
+						.acquire_owned()
+						.await
+						.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+					log::trace!("acquired a permit for step 2");
 
-			writing_worker_handles.spawn_blocking(move || {
-				update_file_lyrics_tag(&mut tagged_file, &lyrics)?;
+					let tagged_tx = tagged_tx.clone();
 
-				let tagged_file_data: TaggedFileData = (&tagged_file).into();
-				log::info!(
-					"successfully wrote tags for {}",
-					tagged_file_data,
-				);
-				Ok(())
-			});
-		}
+					// TODO::perf consider using rayon's thread pool
+					// instead of spawning a task for every file.
+					tagging_worker_handles.spawn_blocking(move || match load_file_tags(&path) {
+						Ok(tagged_file) => {
+							log::info!(
+								"successfully loaded file tags @ path {:?}",
+								path,
+							);
 
-		while let Some(join_res) = writing_worker_handles.join_next().await {
-			if let Err(e) = join_res {
-				join_fail_error!(e);
+							tagged_tx
+								.send(tagged_file)
+								.expect(CHANNEL_SEND_EXPECT_MSG);
+						},
+
+						Err(GuessFileError::InvalidFileType { ft }) => {
+							log::info!(
+								r#"file type "{}" not recognized @ path {:?}; skipping..."#,
+								ft,
+								path,
+							);
+						},
+
+						Err(e) => {
+							log::warn!(
+								r#"error "{}": failed to load file tags @ path {:?}; skipping..."#,
+								e,
+								path,
+							);
+						},
+					});
+				}
+
+				while let Some(join_res) = tagging_worker_handles.join_next().await {
+					if let Err(e) = join_res {
+						join_fail_error!(e);
+					}
+				}
 			}
-		}
-	});
+		},
+		{
+			// Step 3: use file tags to request lyrics.
+			let net_io_semaphore_step_3 = net_io_semaphore.clone();
 
-	db_local_set.await;
-	while let Some(join_res) = join_set.join_next().await {
-		if let Err(e) = join_res {
-			join_fail_error!(e);
-		}
-	}
+			async move {
+				let mut lrc_fetch_worker_handles = JoinSet::new();
+
+				while let Some(tagged_file) = tagged_rx.recv().await {
+					// First, attempt to get lyrics from the database...
+					let tagged_file_data = (&tagged_file).into();
+					log::trace!(
+						"reading lyrics for {:?} from the database...",
+						tagged_file_data,
+					);
+					match db_cache.get_lrc(&tagged_file_data) {
+						Ok(Some(lrc)) => {
+							log::info!(
+								"successfully loaded lyrics from cache for {}",
+								tagged_file_data,
+							);
+
+							lrc_tx
+								.send((lrc, tagged_file))
+								.expect(CHANNEL_SEND_EXPECT_MSG);
+							// ...if that worked, move on.
+							continue;
+						},
+
+						Ok(None) => {
+							log::debug!(
+								"couldn't find lyrics for track {} inside a db cache",
+								tagged_file_data,
+							);
+						},
+
+						Err(e) => {
+							log::warn!(
+								r#"db cache interaction failed with error "{}""#,
+								e,
+							);
+						},
+					}
+
+					// ...if it didn't work, get/init network lyrics fetcher.
+					let lrc_fetcher = lrc_fetcher.clone();
+
+					let net_io_semaphore_step_3 = net_io_semaphore_step_3.clone();
+					lrc_fetch_worker_handles.spawn(async move {
+						let _permit = net_io_semaphore_step_3
+							.acquire_owned()
+							.await
+							.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+						log::trace!("acquired a permit for step 3");
+
+						lrc_fetcher
+							.request_lyrics(&(&tagged_file).into())
+							.await
+							.map(|lyrics| (lyrics, tagged_file))
+					});
+				}
+
+				while let Some(join_res) = lrc_fetch_worker_handles
+					.join_next()
+					.await
+				{
+					match join_res {
+						Ok(Ok((
+							LyricsServiceAcquisitionValue {
+								lyrics,
+								service_name,
+							},
+							tagged_file,
+						))) => {
+							let tagged_file_data: TaggedFileData = (&tagged_file).into();
+							log::info!(
+								r#"service "{}" successfully found lyrics data for {}"#,
+								service_name,
+								tagged_file_data,
+							);
+
+							let tagged_file_data = (&tagged_file).into();
+							if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
+								log::warn!(
+									r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
+									tagged_file_data,
+									e,
+								)
+							}
+
+							lrc_tx
+								.send((lyrics, tagged_file))
+								.expect(CHANNEL_SEND_EXPECT_MSG);
+						},
+
+						Ok(Err(service_errors)) => {
+							for e in service_errors {
+								log::warn!(r#"lyrics service error "{}""#, e);
+							}
+						},
+
+						Err(e) => {
+							join_fail_error!(e);
+						},
+					}
+				}
+			}
+		},
+		{
+			// Step 4: write lyrics tags back to files.
+			let disk_io_semaphore_step_4 = disk_io_semaphore.clone();
+
+			async move {
+				let mut writing_worker_handles: JoinSet<lofty::error::Result<_>> = JoinSet::new();
+
+				while let Some((lyrics, mut tagged_file)) = lrc_rx.recv().await {
+					let disk_io_semaphore_step_4 = disk_io_semaphore_step_4.clone();
+					let _permit = disk_io_semaphore_step_4
+						.acquire_owned()
+						.await
+						.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+					log::trace!("acquired a permit for step 4");
+
+					writing_worker_handles.spawn_blocking(move || {
+						update_file_lyrics_tag(&mut tagged_file, &lyrics)?;
+
+						let tagged_file_data: TaggedFileData = (&tagged_file).into();
+						log::info!(
+							"successfully wrote tags for {}",
+							tagged_file_data,
+						);
+						Ok(())
+					});
+				}
+
+				while let Some(join_res) = writing_worker_handles.join_next().await {
+					if let Err(e) = join_res {
+						join_fail_error!(e);
+					}
+				}
+			}
+		},
+	);
 
 	Ok(())
 }
