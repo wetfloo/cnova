@@ -65,6 +65,7 @@ where
 	let (lrc_tx, mut lrc_rx) = tokio_unbounded_channel::<ChanTaggedWithLyrics>();
 
 	let disk_io_semaphore: Arc<_> = disk_io_semaphore.into();
+	let net_io_semaphore: Arc<_> = net_io_semaphore.into();
 
 	// TODO: add more lyrics services and use this ref counter there.
 	let http_client: Arc<_> = http_client.into();
@@ -90,7 +91,7 @@ where
 			&tagged_tx,
 		),
 		step_3(
-			net_io_semaphore,
+			net_io_semaphore.clone(),
 			&mut tagged_rx,
 			&lrc_tx,
 			&mut db_cache,
@@ -366,7 +367,7 @@ async fn step_3<S, L>(
 			let permit = net_io_semaphore
 				.acquire_owned()
 				.await
-				.expect(DISK_IO_SEMAPHORE_EXPECT_MSG);
+				.expect(NET_IO_SEMAPHORE_EXPECT_MSG);
 			log::trace!(
 				"acquired a permit ({:?}) for step 3",
 				permit,
