@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
 	let disk_io_permits = NonZero::new(cli.processing_jobs)
 		.map(|non_zero| non_zero.get().into())
 		.unwrap_or_else(num_cpus::get);
-	let disk_io_semaphore = tokio::sync::Semaphore::new(disk_io_permits).into();
+	let disk_io_semaphore = tokio::sync::Semaphore::new(disk_io_permits);
 	log::debug!(
 		"initalized {} with {} permits",
 		stringify!(disk_io_semaphore),
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
 	);
 
 	let net_io_permits = cli.download_jobs.into();
-	let net_io_semaphore = tokio::sync::Semaphore::new(net_io_permits).into();
+	let net_io_semaphore = tokio::sync::Semaphore::new(net_io_permits);
 	log::debug!(
 		"initalized {} with {} permits",
 		stringify!(net_io_semaphore),
