@@ -88,14 +88,14 @@ where
 		step_2(
 			disk_io_semaphore.clone(),
 			&mut untagged_rx,
-			&tagged_tx,
+			tagged_tx,
 		),
 		step_3(
 			net_io_semaphore.clone(),
 			&mut tagged_rx,
-			&lrc_tx,
+			lrc_tx,
 			&mut db_cache,
-			lrc_fetcher,
+			lrc_fetcher.into(),
 		),
 		step_4(disk_io_semaphore.clone(), &mut lrc_rx),
 	);
@@ -203,14 +203,14 @@ fn update_file_lyrics_tag(
 ///
 /// Walk the file structure in a separate task,
 /// without blocking tokio's executors for async tasks.
-async fn step_1<I, P, S>(paths: I, disk_io_semaphore: S, tx: Sender<ChanUntagged>)
-where
+async fn step_1<I, P>(
+	paths: I,
+	disk_io_semaphore: Arc<tokio::sync::Semaphore>,
+	tx: Sender<ChanUntagged>,
+) where
 	I: IntoIterator<Item = P> + Send + 'static,
 	P: AsRef<Path>,
-	S: Into<Arc<tokio::sync::Semaphore>>,
 {
-	let disk_io_semaphore = disk_io_semaphore.into();
-
 	let permit = disk_io_semaphore
 		.acquire_owned()
 		.await
@@ -236,12 +236,11 @@ where
 }
 
 /// Step 2: read file tags, when possible.
-async fn step_2<S>(disk_io_semaphore: S, rx: &mut Receiver<ChanUntagged>, tx: &Sender<ChanTagged>)
-where
-	S: Into<Arc<tokio::sync::Semaphore>>,
-{
-	let disk_io_semaphore = disk_io_semaphore.into();
-
+async fn step_2(
+	disk_io_semaphore: Arc<tokio::sync::Semaphore>,
+	rx: &mut Receiver<ChanUntagged>,
+	tx: Sender<ChanTagged>,
+) {
 	let mut worker_handles = JoinSet::new();
 
 	while let Some(path) = rx.recv().await {
@@ -310,19 +309,13 @@ where
 }
 
 /// Step 3: use file tags to request lyrics.
-async fn step_3<S, L>(
-	net_io_semaphore: S,
+async fn step_3(
+	net_io_semaphore: Arc<tokio::sync::Semaphore>,
 	rx: &mut Receiver<ChanTagged>,
-	tx: &Sender<ChanTaggedWithLyrics>,
+	tx: Sender<ChanTaggedWithLyrics>,
 	db_cache: &mut DbCache,
-	lrc_fetcher: L,
-) where
-	S: Into<Arc<tokio::sync::Semaphore>>,
-	L: Into<Arc<LyricsFetcher>>,
-{
-	let net_io_semaphore = net_io_semaphore.into();
-	let lrc_fetcher = lrc_fetcher.into();
-
+	lrc_fetcher: Arc<LyricsFetcher>,
+) {
 	let mut worker_handles = JoinSet::new();
 
 	while let Some(tagged_file) = rx.recv().await {
@@ -363,6 +356,7 @@ async fn step_3<S, L>(
 		// ...if it didn't work, get/init network lyrics fetcher.
 		let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
 		let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
+		let tx = tx.clone();
 		worker_handles.spawn(async move {
 			let permit = net_io_semaphore
 				.acquire_owned()
@@ -373,62 +367,59 @@ async fn step_3<S, L>(
 				permit,
 			);
 
-			lrc_fetcher
+			match lrc_fetcher
 				.request_lyrics(&(&tagged_file).into())
 				.await
 				.map(|lyrics| (lyrics, tagged_file))
+			{
+				Ok((
+					LyricsServiceAcquisitionValue {
+						lyrics,
+						service_name,
+					},
+					tagged_file,
+				)) => {
+					let tagged_file_data: TaggedFileData = (&tagged_file).into();
+					log::info!(
+						r#"service "{}" successfully found lyrics data for {}"#,
+						service_name,
+						tagged_file_data,
+					);
+
+					// let tagged_file_data = (&tagged_file).into();
+					// if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
+					// 	log::warn!(
+					// 		r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
+					// 		tagged_file_data,
+					// 		e,
+					// 	)
+					// }
+
+					tx.send((lyrics, tagged_file))
+						.expect(CHANNEL_SEND_EXPECT_MSG);
+				},
+
+				Err(service_errors) => {
+					for e in service_errors {
+						log::warn!(r#"lyrics service error "{}""#, e);
+					}
+				},
+			}
 		});
 	}
 
 	while let Some(join_res) = worker_handles.join_next().await {
-		match join_res {
-			Ok(Ok((
-				LyricsServiceAcquisitionValue {
-					lyrics,
-					service_name,
-				},
-				tagged_file,
-			))) => {
-				let tagged_file_data: TaggedFileData = (&tagged_file).into();
-				log::info!(
-					r#"service "{}" successfully found lyrics data for {}"#,
-					service_name,
-					tagged_file_data,
-				);
-
-				let tagged_file_data = (&tagged_file).into();
-				if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
-					log::warn!(
-						r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
-						tagged_file_data,
-						e,
-					)
-				}
-
-				tx.send((lyrics, tagged_file))
-					.expect(CHANNEL_SEND_EXPECT_MSG);
-			},
-
-			Ok(Err(service_errors)) => {
-				for e in service_errors {
-					log::warn!(r#"lyrics service error "{}""#, e);
-				}
-			},
-
-			Err(join_err) => {
-				join_fail_error!(join_err);
-			},
+		if let Err(join_err) = join_res {
+			join_fail_error!(join_err);
 		}
 	}
 }
 
 /// Step 4: write lyrics tags back to files.
-async fn step_4<S>(disk_io_semaphore: S, rx: &mut Receiver<ChanTaggedWithLyrics>)
-where
-	S: Into<Arc<tokio::sync::Semaphore>>,
-{
-	let disk_io_semaphore = disk_io_semaphore.into();
-
+async fn step_4(
+	disk_io_semaphore: Arc<tokio::sync::Semaphore>,
+	rx: &mut Receiver<ChanTaggedWithLyrics>,
+) {
 	let mut worker_handles = JoinSet::new();
 
 	while let Some((lyrics, mut tagged_file)) = rx.recv().await {
