@@ -10,6 +10,7 @@ use std::sync::Arc;
 use lofty::config::WriteOptions;
 use lofty::error::LoftyError;
 use lofty::file::TaggedFileExt as _;
+use tokio::sync::mpsc::channel as tokio_channel;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
 use tokio::task::LocalSet;
@@ -18,7 +19,7 @@ use walkdir::WalkDir;
 use wetutil::prelude::*;
 
 use crate::lyrics::Lyrics;
-use crate::lyrics::TaggedFileData;
+use crate::lyrics::TaggedFile;
 use crate::lyrics::db::DbCache;
 use crate::lyrics::fetcher::LyricsFetcher;
 use crate::lyrics::fetcher::LyricsFetcherBuilder;
@@ -482,6 +483,55 @@ async fn step_4(
 				},
 				Err(join_err) => {
 					join_fail_error!(join_err);
+				},
+			}
+		});
+	}
+}
+
+async fn step3_v2(
+	net_io_semaphore: Arc<tokio::sync::Semaphore>,
+	rx: &mut Receiver<ChanTagged>,
+	tx: Sender<ChanTaggedWithLyrics>,
+	db_cache: Rc<DbCache>,
+	lrc_fetcher: Arc<LyricsFetcher>,
+) {
+	let mut net_worker_handles = JoinSet::new();
+
+	let (net_tx, net_rx) = tokio_channel(1);
+
+	while let Some(tagged_file) = rx.recv().await {
+		let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
+		let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
+
+		net_worker_handles.spawn(async move {
+			let permit = net_io_semaphore
+				.acquire_owned()
+				.await
+				.expect(NET_IO_SEMAPHORE_EXPECT_MSG);
+			let res = lrc_fetcher
+				.request_lyrics(&(&tagged_file).into())
+				.await
+				.map(|lyrics| (lyrics, tagged_file));
+
+			mem::drop(permit);
+
+			match res {
+				Ok((
+					LyricsServiceAcquisitionValue {
+						lyrics,
+						service_name,
+					},
+					tagged_file,
+				)) => {
+					tx.send((lyrics, tagged_file))
+						.expect(CHANNEL_SEND_EXPECT_MSG);
+				},
+
+				Err(service_errors) => {
+					for e in service_errors {
+						log::warn!(r#"lyrics service error "{}""#, e);
+					}
 				},
 			}
 		});
