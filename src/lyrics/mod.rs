@@ -9,6 +9,7 @@ use std::time::Duration;
 use lofty::file::AudioFile;
 use lofty::file::TaggedFileExt;
 use lofty::tag::Accessor;
+use wetutil::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, strum::EnumDiscriminants)]
 #[strum_discriminants(repr(i64))]
@@ -92,6 +93,7 @@ impl<T> TaggedFileWrapper<T> {
 }
 
 impl<T> From<T> for TaggedFileWrapper<T> {
+	#[inline]
 	fn from(value: T) -> Self {
 		Self(value)
 	}
@@ -129,5 +131,58 @@ where
 	#[inline]
 	fn duration(&self) -> Duration {
 		self.0.duration()
+	}
+}
+
+pub(crate) struct TaggedFileTags {
+	artist: Option<String>,
+	album: Option<String>,
+	title: Option<String>,
+	duration: Duration,
+}
+
+impl TaggedFileTags {
+	pub(crate) fn new_from_existing<T>(existing: &T) -> Self
+	where
+		T: TaggedFile,
+	{
+		Self {
+			artist: existing.artist().val_into(),
+			album: existing.album().val_into(),
+			title: existing.title().val_into(),
+			duration: existing.duration(),
+		}
+	}
+}
+
+impl TaggedFile for TaggedFileTags {
+	#[inline]
+	fn artist(&self) -> Option<Cow<'_, str>> {
+		self.artist
+			.as_ref()
+			.map(|v| Cow::Borrowed(v.as_str()))
+	}
+
+	fn album(&self) -> Option<Cow<'_, str>> {
+		self.album
+			.as_ref()
+			.map(|v| Cow::Borrowed(v.as_str()))
+	}
+
+	fn title(&self) -> Option<Cow<'_, str>> {
+		self.title
+			.as_ref()
+			.map(|v| Cow::Borrowed(v.as_str()))
+	}
+
+	fn duration(&self) -> Duration {
+		self.duration
+	}
+}
+
+impl fmt::Display for TaggedFileTags {
+	#[inline]
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		TaggedFile::fmt(self, f)
 	}
 }
