@@ -1,4 +1,4 @@
-use crate::lyrics::TaggedFileData;
+use crate::lyrics::TaggedFile;
 use crate::lyrics::service;
 use crate::lyrics::service::LyricsServiceAcquisitionValue;
 use crate::lyrics::service::LyricsServiceError;
@@ -19,11 +19,17 @@ impl LyricsFetcher {
 	/// until one returns successfully, then its value will be returned.
 	/// Any remaining errors will be returned in [`Err`],
 	/// and any other services that could do work would be ignored.
-	pub(crate) async fn request_lyrics(&self, data: &TaggedFileData<'_>) -> LyricsFetcherResult {
+	pub(crate) async fn request_lyrics<T>(&self, tagged_file: &T) -> LyricsFetcherResult
+	where
+		T: TaggedFile,
+	{
 		let mut errors = Vec::with_capacity(0);
 
 		for service in self.services.iter() {
-			match service.request_lyrics(data).await {
+			match service
+				.request_lyrics(tagged_file)
+				.await
+			{
 				Ok(v) => {
 					return Ok(LyricsServiceAcquisitionValue {
 						lyrics: v,

@@ -10,7 +10,7 @@ use strum::IntoDiscriminant;
 use crate::lyrics;
 use crate::lyrics::Lyrics;
 use crate::lyrics::LyricsDiscriminants;
-use crate::lyrics::TaggedFileData;
+use crate::lyrics::TaggedFile;
 
 pub(crate) type DbConnection = rusqlite::Connection;
 
@@ -29,10 +29,13 @@ impl DbCache {
 		Ok(Self(db_conn))
 	}
 
-	pub(crate) fn get_lrc(
+	pub(crate) fn get_lrc<T>(
 		&self,
-		tagged_file_data: &TaggedFileData,
-	) -> Result<Option<lyrics::Lyrics>, DbCacheLyricsError> {
+		tagged_file: &T,
+	) -> Result<Option<lyrics::Lyrics>, DbCacheLyricsError>
+	where
+		T: TaggedFile,
+	{
 		let lyrics = self
 			.0
 			.prepare_cached(queries::GET_LRC)?
@@ -40,20 +43,23 @@ impl DbCache {
 				&[
 					(
 						":artist",
-						tagged_file_data
+						tagged_file
 							.artist()
+							.as_deref()
 							.unwrap_or_default(),
 					),
 					(
 						":album",
-						tagged_file_data
+						tagged_file
 							.album()
+							.as_deref()
 							.unwrap_or_default(),
 					),
 					(
 						":title",
-						tagged_file_data
+						tagged_file
 							.title()
+							.as_deref()
 							.unwrap_or_default(),
 					),
 				],
@@ -76,26 +82,29 @@ impl DbCache {
 			.transpose()
 	}
 
-	pub(crate) fn insert_lrc(
+	pub(crate) fn insert_lrc<T>(
 		&self,
-		tagged_file_data: &TaggedFileData,
+		tagged_file: &T,
 		lyrics: Lyrics,
-	) -> Result<(), DbCacheLyricsError> {
+	) -> Result<(), DbCacheLyricsError>
+	where
+		T: TaggedFile,
+	{
 		let mut stmt = self
 			.0
 			.prepare_cached(queries::INSERT_LRC)?;
 		stmt.execute(rusqlite::named_params! {
 			":lyrics": lyrics.as_str().unwrap_or_default(),
-			":artist": tagged_file_data
+			":artist": tagged_file
 				.artist()
 				.unwrap_or_default(),
-			":album": tagged_file_data
+			":album": tagged_file
 				.album()
 				.unwrap_or_default(),
-			":title": tagged_file_data
+			":title": tagged_file
 				.title()
 				.unwrap_or_default(),
-			":duration_secs": tagged_file_data.duration.as_secs_f64(),
+			":duration_secs": tagged_file.duration().as_secs_f64(),
 			":timestamp": SystemTime::now()
 				.duration_since(UNIX_EPOCH)?
 				.as_secs_f64(),
@@ -163,10 +172,11 @@ pub(super) mod queries {
 #[cfg(test)]
 mod test {
 	use std::assert_matches;
+	use std::borrow::Cow;
+	use std::time::Duration;
 
 	use crate::lyrics::Lyrics;
-	use crate::lyrics::TagData;
-	use crate::lyrics::TaggedFileData;
+	use crate::lyrics::TaggedFile;
 	use crate::lyrics::db::DbCache;
 
 	fn init_cache() -> DbCache {
@@ -199,41 +209,57 @@ mod test {
 		}
 	}
 
+	struct TestTaggedFile {
+		artist: String,
+		album: String,
+		title: String,
+		duration: Duration,
+	}
+
+	impl TaggedFile for TestTaggedFile {
+		fn artist(&self) -> Option<Cow<'_, str>> {
+			Some(Cow::Borrowed(&self.title))
+		}
+
+		fn album(&self) -> Option<Cow<'_, str>> {
+			Some(Cow::Borrowed(&self.album))
+		}
+
+		fn title(&self) -> Option<Cow<'_, str>> {
+			Some(Cow::Borrowed(&self.title))
+		}
+
+		fn duration(&self) -> Duration {
+			self.duration
+		}
+	}
+
 	#[test]
 	fn test_insert_and_get_twice() {
-		let mut cache = init_cache();
+		let cache = init_cache();
 
-		let tag_data = TagData {
-			artist: Some((test_data::artist(1)).into()),
-			album: Some((test_data::album(1)).into()),
-			title: Some((test_data::title(1)).into()),
-		};
-		let tagged_file_data = TaggedFileData {
-			tag_data,
+		let tag_data = TestTaggedFile {
+			artist: test_data::artist(1),
+			album: test_data::album(1),
+			title: test_data::title(1),
 			duration: test_data::duration(1),
 		};
 
 		assert_matches!(
 			cache.insert_lrc(
-				&tagged_file_data,
+				&tag_data,
 				Lyrics::Synced(test_data::lyrics(1)),
 			),
 			Ok(()),
 			"must be able to insert values into the database",
 		);
 		assert_eq!(
-			cache
-				.get_lrc(&tagged_file_data)
-				.ok()
-				.flatten(),
+			cache.get_lrc(&tag_data).ok().flatten(),
 			Some(Lyrics::Synced(test_data::lyrics(1))),
 			"must be able to get track metadata from the database",
 		);
 		assert_eq!(
-			cache
-				.get_lrc(&tagged_file_data)
-				.ok()
-				.flatten(),
+			cache.get_lrc(&tag_data).ok().flatten(),
 			Some(Lyrics::Synced(test_data::lyrics(1))),
 			"must be able to get the same track metadata from the database repeatedly",
 		);
@@ -241,30 +267,24 @@ mod test {
 
 	#[test]
 	fn test_insert_two_and_get() {
-		let mut cache = init_cache();
+		let cache = init_cache();
 
-		let tag_data = TagData {
-			artist: Some(test_data::artist(1).into()),
-			album: Some(test_data::album(1).into()),
-			title: Some(test_data::title(1).into()),
-		};
-		let tagged_file_data_1 = TaggedFileData {
-			tag_data,
+		let tag_data_1 = TestTaggedFile {
+			artist: test_data::artist(1),
+			album: test_data::album(1),
+			title: test_data::title(1),
 			duration: test_data::duration(1),
 		};
-		let tag_data_2 = TagData {
-			artist: Some(test_data::artist(2).into()),
-			album: Some(test_data::album(2).into()),
-			title: Some(test_data::title(2).into()),
-		};
-		let tagged_file_data_2 = TaggedFileData {
-			tag_data: tag_data_2,
+		let tag_data_2 = TestTaggedFile {
+			artist: test_data::artist(2),
+			album: test_data::album(2),
+			title: test_data::title(2),
 			duration: test_data::duration(2),
 		};
 
 		assert_matches!(
 			cache.insert_lrc(
-				&tagged_file_data_1,
+				&tag_data_1,
 				Lyrics::Synced(test_data::lyrics(1)),
 			),
 			Ok(()),
@@ -272,7 +292,7 @@ mod test {
 		);
 		assert_matches!(
 			cache.insert_lrc(
-				&tagged_file_data_2,
+				&tag_data_2,
 				Lyrics::Synced(test_data::lyrics(2)),
 			),
 			Ok(()),
@@ -280,7 +300,7 @@ mod test {
 		);
 		assert_eq!(
 			cache
-				.get_lrc(&tagged_file_data_1)
+				.get_lrc(&tag_data_1)
 				.ok()
 				.flatten(),
 			Some(Lyrics::Synced(test_data::lyrics(1))),
@@ -288,7 +308,7 @@ mod test {
 		);
 		assert_eq!(
 			cache
-				.get_lrc(&tagged_file_data_2)
+				.get_lrc(&tag_data_2)
 				.ok()
 				.flatten(),
 			Some(Lyrics::Synced(test_data::lyrics(2))),

@@ -6,10 +6,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::time::Duration;
 
-use lofty::file::AudioFile as _;
-use lofty::file::TaggedFileExt as _;
-use lofty::tag::Accessor as _;
-use wetutil::prelude::*;
+use lofty::file::AudioFile;
+use lofty::file::TaggedFileExt;
+use lofty::tag::Accessor;
 
 #[derive(Clone, Debug, PartialEq, strum::EnumDiscriminants)]
 #[strum_discriminants(repr(i64))]
@@ -29,85 +28,106 @@ impl Lyrics {
 	}
 }
 
-// TODO: remove this type, it makes no sense to keep it.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TaggedFileData<'a> {
-	pub(crate) tag_data: TagData<'a>,
-	pub(crate) duration: Duration,
-}
+pub(crate) trait TaggedFile {
+	fn artist(&self) -> Option<Cow<'_, str>>;
+	fn album(&self) -> Option<Cow<'_, str>>;
+	fn title(&self) -> Option<Cow<'_, str>>;
+	fn duration(&self) -> Duration;
 
-impl TaggedFileData<'_> {
-	#[inline]
-	pub(crate) fn title(&self) -> Option<&str> {
-		self.tag_data.title.as_deref()
-	}
-
-	#[inline]
-	pub(crate) fn artist(&self) -> Option<&str> {
-		self.tag_data.artist.as_deref()
-	}
-
-	#[inline]
-	pub(crate) fn album(&self) -> Option<&str> {
-		self.tag_data.album.as_deref()
-	}
-
-	#[inline]
-	pub(crate) fn duration(&self) -> Duration {
-		self.duration
-	}
-}
-
-impl<'i, 'o, T> From<&'i lofty::file::BoundTaggedFile<T>> for TaggedFileData<'o>
-where
-	'i: 'o,
-{
-	fn from(value: &'i lofty::file::BoundTaggedFile<T>) -> Self {
-		Self {
-			tag_data: value
-				.primary_tag()
-				.val_into()
-				.unwrap_or_default(),
-			duration: value.properties().duration(),
-		}
-	}
-}
-
-impl fmt::Display for TaggedFileData<'_> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		<TagData as fmt::Display>::fmt(&self.tag_data, f)
-	}
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct TagData<'a> {
-	pub(crate) artist: Option<Cow<'a, str>>,
-	pub(crate) album: Option<Cow<'a, str>>,
-	pub(crate) title: Option<Cow<'a, str>>,
-}
-
-impl<'i, 'o> From<&'i lofty::tag::Tag> for TagData<'o>
-where
-	'i: 'o,
-{
-	#[inline]
-	fn from(value: &'i lofty::tag::Tag) -> Self {
-		Self {
-			artist: value.artist(),
-			album: value.album(),
-			title: value.title(),
-		}
-	}
-}
-
-impl fmt::Display for TagData<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
 			r#"track "{}" by "{}" in album "{}""#,
-			self.title.as_deref().unwrap_or("?"),
-			self.artist.as_deref().unwrap_or("?"),
-			self.album.as_deref().unwrap_or("?"),
+			self.title().as_deref().unwrap_or("?"),
+			self.artist().as_deref().unwrap_or("?"),
+			self.album().as_deref().unwrap_or("?"),
 		)
+	}
+}
+
+impl<F> TaggedFile for lofty::file::BoundTaggedFile<F> {
+	fn artist(&self) -> Option<Cow<'_, str>> {
+		self.primary_tag()
+			.and_then(|tag| tag.artist())
+	}
+
+	fn album(&self) -> Option<Cow<'_, str>> {
+		self.primary_tag()
+			.and_then(|tag| tag.album())
+	}
+
+	fn title(&self) -> Option<Cow<'_, str>> {
+		self.primary_tag()
+			.and_then(|tag| tag.title())
+	}
+
+	fn duration(&self) -> Duration {
+		self.properties().duration()
+	}
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct TaggedFileWrapper<T>(T);
+
+impl<T> TaggedFileWrapper<T> {
+	#[inline]
+	pub(crate) fn new(value: T) -> Self {
+		value.into()
+	}
+
+	#[inline]
+	pub(crate) fn into_inner(self) -> T {
+		self.0
+	}
+
+	#[inline]
+	pub(crate) fn inner(&self) -> &T {
+		&self.0
+	}
+
+	#[inline]
+	pub(crate) fn inner_mut(&mut self) -> &mut T {
+		&mut self.0
+	}
+}
+
+impl<T> From<T> for TaggedFileWrapper<T> {
+	fn from(value: T) -> Self {
+		Self(value)
+	}
+}
+
+impl<T> fmt::Display for TaggedFileWrapper<T>
+where
+	T: TaggedFile,
+{
+	#[inline]
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		TaggedFile::fmt(self, f)
+	}
+}
+
+impl<T> TaggedFile for TaggedFileWrapper<T>
+where
+	T: TaggedFile,
+{
+	#[inline]
+	fn artist(&self) -> Option<Cow<'_, str>> {
+		self.0.artist()
+	}
+
+	#[inline]
+	fn album(&self) -> Option<Cow<'_, str>> {
+		self.0.album()
+	}
+
+	#[inline]
+	fn title(&self) -> Option<Cow<'_, str>> {
+		self.0.title()
+	}
+
+	#[inline]
+	fn duration(&self) -> Duration {
+		self.0.duration()
 	}
 }

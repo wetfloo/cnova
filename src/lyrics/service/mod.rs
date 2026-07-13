@@ -7,13 +7,13 @@ use std::pin::Pin;
 pub(crate) use lrclib::LrclibLyricsFetchService;
 
 use crate::lyrics::Lyrics;
-use crate::lyrics::TaggedFileData;
+use crate::lyrics::TaggedFile;
 
 pub(crate) type LyricsServiceResult =
 	Pin<Box<dyn Future<Output = Result<Lyrics, LyricsServiceErrorInner>> + Send + Sync + 'static>>;
 
 pub(crate) trait LyricsFetchService: fmt::Debug {
-	fn request_lyrics(&self, data: &TaggedFileData) -> LyricsServiceResult;
+	fn request_lyrics(&self, data: &dyn TaggedFile) -> LyricsServiceResult;
 
 	/// Used to get the name of this service to print to the user.
 	fn name(&self) -> &'static str {

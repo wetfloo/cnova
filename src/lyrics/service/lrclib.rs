@@ -4,7 +4,7 @@ use std::sync::Arc;
 use pretty_type_name::pretty_type_name;
 
 use crate::lyrics::Lyrics;
-use crate::lyrics::TaggedFileData;
+use crate::lyrics::TaggedFile;
 use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceErrorInner;
 use crate::lyrics::service::LyricsServiceResult;
@@ -51,20 +51,26 @@ impl fmt::Debug for LrclibLyricsFetchService {
 }
 
 impl LyricsFetchService for LrclibLyricsFetchService {
-	fn request_lyrics(&self, data: &TaggedFileData) -> LyricsServiceResult {
+	fn request_lyrics(&self, data: &dyn TaggedFile) -> LyricsServiceResult {
 		let mut params = Vec::with_capacity(4);
 
-		if let Some(v) = data.title() {
+		let title = data.title();
+		if let Some(v) = title.as_deref() {
 			params.push(("track_name", v));
 		}
-		if let Some(v) = data.artist() {
+
+		let artist = data.artist();
+		if let Some(v) = artist.as_deref() {
 			params.push(("artist_name", v));
 		}
-		if let Some(v) = data.album() {
+
+		let album = data.album();
+		if let Some(v) = album.as_deref() {
 			params.push(("album_name", v));
 		}
-		let duration = &data.duration.as_secs().to_string();
-		params.push(("duration", duration));
+
+		let duration = data.duration().as_secs().to_string();
+		params.push(("duration", &duration));
 
 		let url = reqwest::Url::parse_with_params("https://lrclib.net/api/get", params).expect(
 			"since we typed this url by hand without user input, we expect it to always parse correctly",

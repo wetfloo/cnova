@@ -10,7 +10,6 @@ use std::sync::Arc;
 use lofty::config::WriteOptions;
 use lofty::error::LoftyError;
 use lofty::file::TaggedFileExt as _;
-use tokio::sync::mpsc::channel as tokio_channel;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
 use tokio::task::LocalSet;
@@ -19,7 +18,7 @@ use walkdir::WalkDir;
 use wetutil::prelude::*;
 
 use crate::lyrics::Lyrics;
-use crate::lyrics::TaggedFile;
+use crate::lyrics::TaggedFileWrapper;
 use crate::lyrics::db::DbCache;
 use crate::lyrics::fetcher::LyricsFetcher;
 use crate::lyrics::fetcher::LyricsFetcherBuilder;
@@ -183,6 +182,7 @@ where
 				_ => Ok(tagged_file),
 			}
 		})
+		.ok_into()
 }
 
 fn update_file_lyrics_tag(
@@ -333,22 +333,23 @@ async fn step_3(
 	let db_cache: Rc<_> = db_cache.into();
 
 	while let Some(tagged_file) = rx.recv().await {
+		let tagged_file_wrapper = TaggedFileWrapper::new(tagged_file);
+
 		// First, attempt to get lyrics from the database...
-		let tagged_file_data = (&tagged_file).into();
 		log::trace!(
-			"reading lyrics for {:?} from the database...",
-			tagged_file_data,
+			"reading lyrics for {} from the database...",
+			tagged_file_wrapper,
 		);
 		let db_cache = db_cache.clone();
 
-		match db_cache.get_lrc(&tagged_file_data) {
+		match db_cache.get_lrc(&tagged_file_wrapper) {
 			Ok(Some(lrc)) => {
 				log::info!(
 					"successfully loaded lyrics from cache for {}",
-					tagged_file_data,
+					tagged_file_wrapper,
 				);
 
-				tx.send((lrc, tagged_file))
+				tx.send((lrc, tagged_file_wrapper.into_inner()))
 					.expect(CHANNEL_SEND_EXPECT_MSG);
 				// ...if that worked, move on.
 				continue;
@@ -357,7 +358,7 @@ async fn step_3(
 			Ok(None) => {
 				log::debug!(
 					"couldn't find lyrics for track {} inside a db cache",
-					tagged_file_data,
+					tagged_file_wrapper,
 				);
 			},
 
@@ -385,9 +386,9 @@ async fn step_3(
 					permit,
 				);
 				let res = lrc_fetcher
-					.request_lyrics(&(&tagged_file).into())
+					.request_lyrics(&tagged_file_wrapper)
 					.await
-					.map(|lyrics| (lyrics, tagged_file));
+					.map(|lyrics| (lyrics, tagged_file_wrapper));
 
 				mem::drop(permit);
 
@@ -397,25 +398,23 @@ async fn step_3(
 							lyrics,
 							service_name,
 						},
-						tagged_file,
+						tagged_file_wrapper,
 					)) => {
-						let tagged_file_data: TaggedFileData = (&tagged_file).into();
 						log::info!(
 							r#"service "{}" successfully found lyrics data for {}"#,
 							service_name,
-							tagged_file_data,
+							tagged_file_wrapper,
 						);
 
-						let tagged_file_data = (&tagged_file).into();
-						if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
+						if let Err(e) = db_cache.insert_lrc(&tagged_file_wrapper, lyrics.clone()) {
 							log::warn!(
 								r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
-								tagged_file_data,
+								tagged_file_wrapper,
 								e,
 							)
 						}
 
-						tx.send((lyrics, tagged_file))
+						tx.send((lyrics, tagged_file_wrapper.into_inner()))
 							.expect(CHANNEL_SEND_EXPECT_MSG);
 					},
 
@@ -461,77 +460,26 @@ async fn step_4(
 				let _permit = permit;
 				(
 					update_file_lyrics_tag(&mut tagged_file, &lyrics),
-					tagged_file,
+					TaggedFileWrapper::new(tagged_file),
 				)
 			})
 			.await
 			{
-				Ok((Ok(()), tagged_file)) => {
-					let tagged_file_data: TaggedFileData = (&tagged_file).into();
+				Ok((Ok(()), tagged_file_wrapper)) => {
 					log::info!(
 						"successfully wrote tags for {}",
-						tagged_file_data,
+						tagged_file_wrapper,
 					);
 				},
-				Ok((Err(e), tagged_file)) => {
-					let tagged_file_data: TaggedFileData = (&tagged_file).into();
+				Ok((Err(e), tagged_file_wrapper)) => {
 					log::warn!(
 						r#"failed to write tags for file {} with error "{}""#,
-						tagged_file_data,
+						tagged_file_wrapper,
 						e,
 					);
 				},
 				Err(join_err) => {
 					join_fail_error!(join_err);
-				},
-			}
-		});
-	}
-}
-
-async fn step3_v2(
-	net_io_semaphore: Arc<tokio::sync::Semaphore>,
-	rx: &mut Receiver<ChanTagged>,
-	tx: Sender<ChanTaggedWithLyrics>,
-	db_cache: Rc<DbCache>,
-	lrc_fetcher: Arc<LyricsFetcher>,
-) {
-	let mut net_worker_handles = JoinSet::new();
-
-	let (net_tx, net_rx) = tokio_channel(1);
-
-	while let Some(tagged_file) = rx.recv().await {
-		let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
-		let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
-
-		net_worker_handles.spawn(async move {
-			let permit = net_io_semaphore
-				.acquire_owned()
-				.await
-				.expect(NET_IO_SEMAPHORE_EXPECT_MSG);
-			let res = lrc_fetcher
-				.request_lyrics(&(&tagged_file).into())
-				.await
-				.map(|lyrics| (lyrics, tagged_file));
-
-			mem::drop(permit);
-
-			match res {
-				Ok((
-					LyricsServiceAcquisitionValue {
-						lyrics,
-						service_name,
-					},
-					tagged_file,
-				)) => {
-					tx.send((lyrics, tagged_file))
-						.expect(CHANNEL_SEND_EXPECT_MSG);
-				},
-
-				Err(service_errors) => {
-					for e in service_errors {
-						log::warn!(r#"lyrics service error "{}""#, e);
-					}
 				},
 			}
 		});
