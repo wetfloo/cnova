@@ -3,13 +3,16 @@ mod tag_types;
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use lofty::config::WriteOptions;
 use lofty::error::LoftyError;
 use lofty::file::TaggedFileExt as _;
 use tokio::sync::mpsc::unbounded_channel as tokio_unbounded_channel;
 use tokio::task::JoinSet;
+use tokio::task::LocalSet;
 use tokio::task::spawn_blocking;
 use walkdir::WalkDir;
 use wetutil::prelude::*;
@@ -36,6 +39,7 @@ const CHANNEL_SEND_EXPECT_MSG: &str =
 	"couldn't send the value to the channel. did someone close it?";
 const DISK_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire disk_io_semaphore, was it dropped?";
 const NET_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire net_io_semaphore, was it dropped?";
+const DB_CACHE_MUTEX_EXPECT_MSG: &str = "couldn't lock the mutex, did the previous holder panic?";
 
 macro_rules! join_fail_error {
 	() => {{
@@ -51,7 +55,7 @@ macro_rules! join_fail_error {
 
 pub(super) async fn lurk_and_tag<I, P>(
 	paths: I,
-	mut db_cache: DbCache,
+	db_cache: DbCache,
 	http_client: reqwest::Client,
 	disk_io_semaphore: tokio::sync::Semaphore,
 	net_io_semaphore: tokio::sync::Semaphore,
@@ -94,7 +98,7 @@ where
 			net_io_semaphore.clone(),
 			&mut tagged_rx,
 			lrc_tx,
-			&mut db_cache,
+			db_cache,
 			lrc_fetcher.into(),
 		),
 		step_4(disk_io_semaphore.clone(), &mut lrc_rx),
@@ -313,19 +317,30 @@ async fn step_3(
 	net_io_semaphore: Arc<tokio::sync::Semaphore>,
 	rx: &mut Receiver<ChanTagged>,
 	tx: Sender<ChanTaggedWithLyrics>,
-	db_cache: &mut DbCache,
+	db_cache: DbCache,
 	lrc_fetcher: Arc<LyricsFetcher>,
 ) {
 	let mut worker_handles = JoinSet::new();
 
+	// At some point I just gave up...
+	// This is a problem for future me.
+	let db_cache = Rc::new(Mutex::new(db_cache));
+
 	while let Some(tagged_file) = rx.recv().await {
+		let local_set = LocalSet::new();
+
 		// First, attempt to get lyrics from the database...
 		let tagged_file_data = (&tagged_file).into();
 		log::trace!(
 			"reading lyrics for {:?} from the database...",
 			tagged_file_data,
 		);
-		match db_cache.get_lrc(&tagged_file_data) {
+		let db_cache = db_cache.clone();
+		match db_cache
+			.lock()
+			.expect(DB_CACHE_MUTEX_EXPECT_MSG)
+			.get_lrc(&tagged_file_data)
+		{
 			Ok(Some(lrc)) => {
 				log::info!(
 					"successfully loaded lyrics from cache for {}",
@@ -357,55 +372,63 @@ async fn step_3(
 		let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
 		let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
 		let tx = tx.clone();
-		worker_handles.spawn(async move {
-			let permit = net_io_semaphore
-				.acquire_owned()
-				.await
-				.expect(NET_IO_SEMAPHORE_EXPECT_MSG);
-			log::trace!(
-				"acquired a permit ({:?}) for step 3",
-				permit,
-			);
 
-			match lrc_fetcher
-				.request_lyrics(&(&tagged_file).into())
-				.await
-				.map(|lyrics| (lyrics, tagged_file))
-			{
-				Ok((
-					LyricsServiceAcquisitionValue {
-						lyrics,
-						service_name,
+		worker_handles.spawn_local_on(
+			async move {
+				let permit = net_io_semaphore
+					.acquire_owned()
+					.await
+					.expect(NET_IO_SEMAPHORE_EXPECT_MSG);
+				log::trace!(
+					"acquired a permit ({:?}) for step 3",
+					permit,
+				);
+
+				match lrc_fetcher
+					.request_lyrics(&(&tagged_file).into())
+					.await
+					.map(|lyrics| (lyrics, tagged_file))
+				{
+					Ok((
+						LyricsServiceAcquisitionValue {
+							lyrics,
+							service_name,
+						},
+						tagged_file,
+					)) => {
+						let tagged_file_data: TaggedFileData = (&tagged_file).into();
+						log::info!(
+							r#"service "{}" successfully found lyrics data for {}"#,
+							service_name,
+							tagged_file_data,
+						);
+
+						let tagged_file_data = (&tagged_file).into();
+						if let Err(e) = db_cache
+							.lock()
+							.expect(DB_CACHE_MUTEX_EXPECT_MSG)
+							.insert_lrc(&tagged_file_data, lyrics.clone())
+						{
+							log::warn!(
+								r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
+								tagged_file_data,
+								e,
+							)
+						}
+
+						tx.send((lyrics, tagged_file))
+							.expect(CHANNEL_SEND_EXPECT_MSG);
 					},
-					tagged_file,
-				)) => {
-					let tagged_file_data: TaggedFileData = (&tagged_file).into();
-					log::info!(
-						r#"service "{}" successfully found lyrics data for {}"#,
-						service_name,
-						tagged_file_data,
-					);
 
-					// let tagged_file_data = (&tagged_file).into();
-					// if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
-					// 	log::warn!(
-					// 		r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
-					// 		tagged_file_data,
-					// 		e,
-					// 	)
-					// }
-
-					tx.send((lyrics, tagged_file))
-						.expect(CHANNEL_SEND_EXPECT_MSG);
-				},
-
-				Err(service_errors) => {
-					for e in service_errors {
-						log::warn!(r#"lyrics service error "{}""#, e);
-					}
-				},
-			}
-		});
+					Err(service_errors) => {
+						for e in service_errors {
+							log::warn!(r#"lyrics service error "{}""#, e);
+						}
+					},
+				}
+			},
+			&local_set,
+		);
 	}
 
 	while let Some(join_res) = worker_handles.join_next().await {
