@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
 		"initialized database path: {:?}",
 		db_path,
 	);
-	let db_cache = sqlite::Connection::open(&db_path).and_then(DbCache::new)?;
+	let db_cache = rusqlite::Connection::open(&db_path).and_then(DbCache::new)?;
 
 	let mut client_builder = reqwest::ClientBuilder::new().user_agent(formatcp!(
 		"{} v{} ({})",

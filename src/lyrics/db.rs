@@ -4,6 +4,7 @@ use std::time::SystemTimeError;
 use std::time::UNIX_EPOCH;
 
 use pretty_type_name::pretty_type_name;
+use rusqlite::OptionalExtension;
 use strum::IntoDiscriminant;
 
 use crate::lyrics;
@@ -11,9 +12,9 @@ use crate::lyrics::Lyrics;
 use crate::lyrics::LyricsDiscriminants;
 use crate::lyrics::TaggedFileData;
 
-pub(crate) type DbConnection = sqlite::Connection;
+pub(crate) type DbConnection = rusqlite::Connection;
 
-pub(crate) struct DbCache(DbCacheInner);
+pub(crate) struct DbCache(DbConnection);
 
 impl fmt::Debug for DbCache {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
@@ -21,153 +22,92 @@ impl fmt::Debug for DbCache {
 	}
 }
 
-#[ouroboros::self_referencing]
-struct DbCacheInner {
-	db_conn: DbConnection,
-	#[borrows(db_conn)]
-	#[covariant]
-	get_lyrics_statement: sqlite::Statement<'this>,
-	#[borrows(db_conn)]
-	#[covariant]
-	insert_lyrics_statement: sqlite::Statement<'this>,
-}
-
 impl DbCache {
-	pub(crate) fn new(db_conn: DbConnection) -> Result<Self, sqlite::Error> {
-		db_conn.execute(queries::INIT_TABLE_LRC)?;
+	pub(crate) fn new(db_conn: DbConnection) -> Result<Self, rusqlite::Error> {
+		db_conn.execute(queries::INIT_TABLE_LRC, ())?;
 
-		let inner = DbCacheInner::try_new(
-			db_conn,
-			|db_conn: &DbConnection| db_conn.prepare(queries::GET_LRC),
-			|db_conn: &DbConnection| db_conn.prepare(queries::INSERT_LRC),
-		)?;
-
-		Ok(Self(inner))
+		Ok(Self(db_conn))
 	}
 
 	pub(crate) fn get_lrc(
-		&mut self,
+		&self,
 		tagged_file_data: &TaggedFileData,
 	) -> Result<Option<lyrics::Lyrics>, DbCacheLyricsError> {
-		match self
+		let lyrics = self
 			.0
-			.with_get_lyrics_statement_mut(|statement| {
-				Self::get_lrc_internal(statement, tagged_file_data)
-			})? {
-			Some((lyrics, status)) => LyricsDiscriminants::from_repr(status)
-				.map(|discriminant| {
-					Some(match discriminant {
+			.prepare_cached(queries::GET_LRC)?
+			.query_row(
+				&[
+					(
+						":artist",
+						tagged_file_data
+							.artist()
+							.unwrap_or_default(),
+					),
+					(
+						":album",
+						tagged_file_data
+							.album()
+							.unwrap_or_default(),
+					),
+					(
+						":title",
+						tagged_file_data
+							.title()
+							.unwrap_or_default(),
+					),
+				],
+				|row| Ok((row.get("lyrics")?, row.get("status")?)),
+			)
+			.optional()?;
+
+		lyrics
+			.map(|(lyrics, status)| {
+				LyricsDiscriminants::from_repr(status)
+					.map(|discriminant| match discriminant {
 						LyricsDiscriminants::Synced => Lyrics::Synced(lyrics),
 						LyricsDiscriminants::Unsynced => Lyrics::Unsynced(lyrics),
 						LyricsDiscriminants::Instrumental => Lyrics::Instrumental,
 					})
-				})
-				.ok_or(DbCacheLyricsError::StatusMismatch(
-					status,
-				)),
-			None => Ok(None),
-		}
-	}
-
-	fn get_lrc_internal(
-		statement: &mut sqlite::Statement,
-		tagged_file_data: &TaggedFileData,
-	) -> Result<Option<(String, i64)>, DbCacheLyricsError> {
-		// Necessary for repeated calls.
-		statement.reset()?;
-
-		statement.bind((
-			":artist",
-			tagged_file_data
-				.artist()
-				.unwrap_or_default(),
-		))?;
-		statement.bind((
-			":album",
-			tagged_file_data
-				.album()
-				.unwrap_or_default(),
-		))?;
-		statement.bind((
-			":title",
-			tagged_file_data
-				.title()
-				.unwrap_or_default(),
-		))?;
-
-		Ok(match statement.next()? {
-			sqlite::State::Row => {
-				let lyrics: String = statement.read("lyrics")?;
-				let status: i64 = statement.read("status")?;
-				Some((lyrics, status))
-			},
-			sqlite::State::Done => None,
-		})
+					.ok_or(DbCacheLyricsError::StatusMismatch(
+						status,
+					))
+			})
+			.transpose()
 	}
 
 	pub(crate) fn insert_lrc(
-		&mut self,
+		&self,
 		tagged_file_data: &TaggedFileData,
 		lyrics: Lyrics,
 	) -> Result<(), DbCacheLyricsError> {
-		self.0
-			.with_insert_lyrics_statement_mut(|statement| {
-				Self::insert_lrc_internal(statement, tagged_file_data, lyrics)
-			})
-	}
-
-	fn insert_lrc_internal(
-		statement: &mut sqlite::Statement,
-		tagged_file_data: &TaggedFileData,
-		lyrics: Lyrics,
-	) -> Result<(), DbCacheLyricsError> {
-		// Necessary for repeated calls.
-		// Yes, even for inserts.
-		statement.reset()?;
-
-		statement.bind((
-			":lyrics",
-			lyrics.as_str().unwrap_or_default(),
-		))?;
-		statement.bind((
-			":artist",
-			tagged_file_data
+		let mut stmt = self
+			.0
+			.prepare_cached(queries::INSERT_LRC)?;
+		stmt.execute(rusqlite::named_params! {
+			":lyrics": lyrics.as_str().unwrap_or_default(),
+			":artist": tagged_file_data
 				.artist()
 				.unwrap_or_default(),
-		))?;
-		statement.bind((
-			":album",
-			tagged_file_data
+			":album": tagged_file_data
 				.album()
 				.unwrap_or_default(),
-		))?;
-		statement.bind((
-			":title",
-			tagged_file_data
+			":title": tagged_file_data
 				.title()
 				.unwrap_or_default(),
-		))?;
-		statement.bind((
-			":duration_secs",
-			tagged_file_data.duration.as_secs_f64(),
-		))?;
-		statement.bind((
-			":timestamp",
-			SystemTime::now()
+			":duration_secs": tagged_file_data.duration.as_secs_f64(),
+			":timestamp": SystemTime::now()
 				.duration_since(UNIX_EPOCH)?
 				.as_secs_f64(),
-		))?;
-		statement.bind((":status", lyrics.discriminant() as i64))?;
+			":status": lyrics.discriminant() as i64,
+		})?;
 
-		match statement.next()? {
-			sqlite::State::Row => unreachable!(),
-			sqlite::State::Done => Ok(()),
-		}
+		Ok(())
 	}
 }
 
 impl TryFrom<DbConnection> for DbCache {
-	type Error = sqlite::Error;
+	type Error = rusqlite::Error;
 
 	#[inline]
 	fn try_from(value: DbConnection) -> Result<Self, Self::Error> {
@@ -180,7 +120,7 @@ pub(crate) enum DbCacheLyricsError {
 	#[error("Invalid lyrics status in the database: {}", .0)]
 	StatusMismatch(i64),
 	#[error(transparent)]
-	Sqlite(#[from] sqlite::Error),
+	Sqlite(#[from] rusqlite::Error),
 	#[error(transparent)]
 	Time(#[from] SystemTimeError),
 }
@@ -230,7 +170,7 @@ mod test {
 	use crate::lyrics::db::DbCache;
 
 	fn init_cache() -> DbCache {
-		let res = sqlite::Connection::open(":memory:").and_then(DbCache::new);
+		let res = rusqlite::Connection::open(":memory:").and_then(DbCache::new);
 
 		assert_matches!(res, Ok(_));
 

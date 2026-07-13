@@ -1,11 +1,11 @@
 mod tag_types;
 
 use std::fs::OpenOptions;
+use std::mem;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use lofty::config::WriteOptions;
 use lofty::error::LoftyError;
@@ -39,7 +39,6 @@ const CHANNEL_SEND_EXPECT_MSG: &str =
 	"couldn't send the value to the channel. did someone close it?";
 const DISK_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire disk_io_semaphore, was it dropped?";
 const NET_IO_SEMAPHORE_EXPECT_MSG: &str = "couldn't acquire net_io_semaphore, was it dropped?";
-const DB_CACHE_MUTEX_EXPECT_MSG: &str = "couldn't lock the mutex, did the previous holder panic?";
 
 macro_rules! join_fail_error {
 	() => {{
@@ -329,14 +328,10 @@ async fn step_3(
 	lrc_fetcher: Arc<LyricsFetcher>,
 ) {
 	let mut worker_handles = JoinSet::new();
-
-	// At some point I just gave up...
-	// This is a problem for future me.
-	let db_cache = Rc::new(Mutex::new(db_cache));
+	let local_set = LocalSet::new();
+	let db_cache: Rc<_> = db_cache.into();
 
 	while let Some(tagged_file) = rx.recv().await {
-		let local_set = LocalSet::new();
-
 		// First, attempt to get lyrics from the database...
 		let tagged_file_data = (&tagged_file).into();
 		log::trace!(
@@ -344,11 +339,8 @@ async fn step_3(
 			tagged_file_data,
 		);
 		let db_cache = db_cache.clone();
-		match db_cache
-			.lock()
-			.expect(DB_CACHE_MUTEX_EXPECT_MSG)
-			.get_lrc(&tagged_file_data)
-		{
+
+		match db_cache.get_lrc(&tagged_file_data) {
 			Ok(Some(lrc)) => {
 				log::info!(
 					"successfully loaded lyrics from cache for {}",
@@ -358,7 +350,7 @@ async fn step_3(
 				tx.send((lrc, tagged_file))
 					.expect(CHANNEL_SEND_EXPECT_MSG);
 				// ...if that worked, move on.
-				continue;
+				return;
 			},
 
 			Ok(None) => {
@@ -391,12 +383,14 @@ async fn step_3(
 					"acquired a permit ({:?}) for step 3",
 					permit,
 				);
-
-				match lrc_fetcher
+				let res = lrc_fetcher
 					.request_lyrics(&(&tagged_file).into())
 					.await
-					.map(|lyrics| (lyrics, tagged_file))
-				{
+					.map(|lyrics| (lyrics, tagged_file));
+
+				mem::drop(permit);
+
+				match res {
 					Ok((
 						LyricsServiceAcquisitionValue {
 							lyrics,
@@ -412,11 +406,7 @@ async fn step_3(
 						);
 
 						let tagged_file_data = (&tagged_file).into();
-						if let Err(e) = db_cache
-							.lock()
-							.expect(DB_CACHE_MUTEX_EXPECT_MSG)
-							.insert_lrc(&tagged_file_data, lyrics.clone())
-						{
+						if let Err(e) = db_cache.insert_lrc(&tagged_file_data, lyrics.clone()) {
 							log::warn!(
 								r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
 								tagged_file_data,
