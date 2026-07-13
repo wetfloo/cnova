@@ -350,7 +350,7 @@ async fn step_3(
 				tx.send((lrc, tagged_file))
 					.expect(CHANNEL_SEND_EXPECT_MSG);
 				// ...if that worked, move on.
-				return;
+				continue;
 			},
 
 			Ok(None) => {
