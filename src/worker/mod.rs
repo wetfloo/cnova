@@ -329,15 +329,15 @@ async fn step_3(
 	db_cache: Rc<DbCache>,
 	lrc_fetcher: Arc<LyricsFetcher>,
 ) {
+	let (lrc_request_tx, mut lrc_request_rx) = tokio_channel(1);
 	let (db_insert_tx, mut db_insert_rx) = tokio_channel(1);
 
-	let (mut net_workers, ()) = tokio::join!(
+	let ((), mut net_workers, ()) = tokio::join!(
 		{
+			let tx = tx.clone();
 			let db_cache = db_cache.clone();
 
 			async move {
-				let mut net_workers = JoinSet::new();
-
 				while let Some(tagged_file_wrapper) = rx
 					.recv()
 					.await
@@ -367,65 +367,10 @@ async fn step_3(
 								tagged_file_wrapper,
 							);
 
-							// ...if it didn't work, get/init network lyrics fetcher.
-							net_workers.spawn({
-								let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
-								let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
-								let tx = tx.clone();
-								let db_insert_tx = db_insert_tx.clone();
-
-								async move {
-									let permit = net_io_semaphore
-										.acquire_owned()
-										.await
-										.expect(NET_IO_SEMAPHORE_EXPECT_MSG);
-									log::trace!(
-										"acquired a permit ({:?}) for step 3",
-										permit,
-									);
-									let res = lrc_fetcher
-										.request_lyrics(&tagged_file_wrapper)
-										.await
-										.map(|lyrics| (lyrics, tagged_file_wrapper));
-
-									mem::drop(permit);
-
-									match res {
-										Ok((
-											LyricsServiceAcquisitionValue {
-												lyrics,
-												service_name,
-											},
-											tagged_file_wrapper,
-										)) => {
-											log::info!(
-												r#"service "{}" successfully found lyrics data for {}"#,
-												service_name,
-												tagged_file_wrapper,
-											);
-
-											db_insert_tx
-												.send((
-													TaggedFileTags::new_from_existing(
-														&tagged_file_wrapper,
-													),
-													lyrics.clone(),
-												))
-												.await
-												.expect(CHANNEL_SEND_EXPECT_MSG);
-
-											tx.send((lyrics, tagged_file_wrapper.into_inner()))
-												.expect(CHANNEL_SEND_EXPECT_MSG);
-										},
-
-										Err(service_errors) => {
-											for e in service_errors {
-												log::warn!(r#"lyrics service error "{}""#, e);
-											}
-										},
-									}
-								}
-							});
+							lrc_request_tx
+								.send(tagged_file_wrapper)
+								.await
+								.expect(CHANNEL_SEND_EXPECT_MSG);
 						},
 
 						Err(e) => {
@@ -435,6 +380,73 @@ async fn step_3(
 							);
 						},
 					}
+				}
+			}
+		},
+		{
+			let tx = tx.clone();
+
+			async move {
+				let mut net_workers = JoinSet::new();
+
+				while let Some(tagged_file_wrapper) = lrc_request_rx.recv().await {
+					// ...if it didn't work, get/init network lyrics fetcher.
+					net_workers.spawn({
+						let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
+						let tx = tx.clone();
+						let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
+						let db_insert_tx = db_insert_tx.clone();
+
+						async move {
+							let permit = net_io_semaphore
+								.acquire_owned()
+								.await
+								.expect(NET_IO_SEMAPHORE_EXPECT_MSG);
+							log::trace!(
+								"acquired a permit ({:?}) for step 3",
+								permit,
+							);
+							let res = lrc_fetcher
+								.request_lyrics(&tagged_file_wrapper)
+								.await
+								.map(|lyrics| (lyrics, tagged_file_wrapper));
+
+							mem::drop(permit);
+
+							match res {
+								Ok((
+									LyricsServiceAcquisitionValue {
+										lyrics,
+										service_name,
+									},
+									tagged_file_wrapper,
+								)) => {
+									log::info!(
+										r#"service "{}" successfully found lyrics data for {}"#,
+										service_name,
+										tagged_file_wrapper,
+									);
+
+									db_insert_tx
+										.send((
+											TaggedFileTags::new_from_existing(&tagged_file_wrapper),
+											lyrics.clone(),
+										))
+										.await
+										.expect(CHANNEL_SEND_EXPECT_MSG);
+
+									tx.send((lyrics, tagged_file_wrapper.into_inner()))
+										.expect(CHANNEL_SEND_EXPECT_MSG);
+								},
+
+								Err(service_errors) => {
+									for e in service_errors {
+										log::warn!(r#"lyrics service error "{}""#, e);
+									}
+								},
+							}
+						}
+					});
 				}
 
 				net_workers
