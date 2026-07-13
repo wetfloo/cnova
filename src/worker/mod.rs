@@ -43,11 +43,19 @@ const DB_CACHE_MUTEX_EXPECT_MSG: &str = "couldn't lock the mutex, did the previo
 
 macro_rules! join_fail_error {
 	() => {{
-		::log::error!("failed to join a task");
+		::log::error!(
+			"{}:{}:{}:failed to join a task",
+			::core::file!(),
+			::core::column!(),
+			::core::line!(),
+		);
 	}};
 	($err:expr$(,)?) => {{
 		::log::error!(
-			r#"failed to join a task with error "{}""#,
+			r#"{}:{}:{}: failed to join a task with error "{}""#,
+			::core::file!(),
+			::core::column!(),
+			::core::line!(),
 			$err,
 		);
 	}};
