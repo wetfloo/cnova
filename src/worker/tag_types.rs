@@ -1,6 +1,5 @@
 use lofty::file::TaggedFileExt as _;
 
-
 pub(super) struct TagTypesToWrite {
 	tag_type: lofty::tag::TagType,
 	/// Whether we have shown the primary tag type before.
