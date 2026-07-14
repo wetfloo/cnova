@@ -1,3 +1,5 @@
+//! Handle command-line arguments passed to the program.
+
 use std::path::PathBuf;
 
 use clap::Parser;

@@ -1,3 +1,6 @@
+//! Fetch lyrics from the network,
+//! using [`LyricsFetchService`](service::LyricsFetchService) implementation instances.
+
 use crate::lyrics::TaggedFile;
 use crate::lyrics::service;
 use crate::lyrics::service::LyricsServiceAcquisitionValue;

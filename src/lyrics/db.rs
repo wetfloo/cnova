@@ -1,3 +1,5 @@
+//! Handle database cache interactions.
+
 use std::fmt;
 use std::time::SystemTime;
 use std::time::SystemTimeError;

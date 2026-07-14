@@ -1,3 +1,5 @@
+//! Internet lyrics fetching services, implementing [`LyricsFetchService`].
+
 mod lrclib;
 
 use std::any::type_name;

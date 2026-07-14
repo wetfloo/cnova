@@ -1,3 +1,10 @@
+//! Try to understand what tag types actually need to be written.
+//!
+//! Some file formats, like [MP3](https://en.wikipedia.org/wiki/MP3),
+//! have multiple supported tag formats,
+//! like [ID3v2](https://en.wikipedia.org/wiki/ID3#ID3v2)
+//! and [APE](https://en.wikipedia.org/wiki/APE_tag).
+
 use lofty::file::TaggedFileExt as _;
 
 pub(super) struct TagTypesToWrite {

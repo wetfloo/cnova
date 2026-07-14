@@ -1,3 +1,11 @@
+//! Do the program's work as fast as possible.
+//!
+//! This module is where the biggest chunk of work actually happens.
+//! Its *steps* are split up into methods
+//! (1[step_1], 2[step_2], 3[step_3], 4[step_4]),
+//! so that it's easier to understand the distinct steps of the pipeline
+//! (*discover files*, *read file tags*, *find lyrics*, *write file tags*).
+
 mod tag_types;
 
 use std::fs::OpenOptions;
