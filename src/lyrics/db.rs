@@ -1,12 +1,13 @@
 //! Handle database cache interactions.
 
+use std::rc::Rc;
 use std::time::SystemTime;
 use std::time::SystemTimeError;
 use std::time::UNIX_EPOCH;
-use wetutil::impl_gen;
 
 use rusqlite::OptionalExtension;
 use strum::IntoDiscriminant;
+use wetutil::impl_gen;
 
 use crate::lyrics;
 use crate::lyrics::Lyrics;
@@ -15,7 +16,16 @@ use crate::lyrics::TaggedFile;
 
 pub(crate) type DbConnection = rusqlite::Connection;
 
-pub(crate) struct DbCache(DbConnection);
+/// An abstract cache over a database.
+///
+/// Using this type's [`Clone`]
+/// implementation will clone the underlying [`Rc`].
+///
+/// This type is [`!Send`][Send], because the
+/// underlying wrapped types are [`!Send`][Send].
+pub(crate) struct DbCache {
+	inner: Rc<DbConnection>,
+}
 
 impl_gen::debug::from_type_name!(DbCache);
 
@@ -23,7 +33,9 @@ impl DbCache {
 	pub(crate) fn new(db_conn: DbConnection) -> Result<Self, rusqlite::Error> {
 		db_conn.execute(queries::INIT_TABLE_LRC, ())?;
 
-		Ok(Self(db_conn))
+		Ok(Self {
+			inner: db_conn.into(),
+		})
 	}
 
 	pub(crate) fn get_lrc<T>(
@@ -34,7 +46,7 @@ impl DbCache {
 		T: TaggedFile,
 	{
 		let lyrics = self
-			.0
+			.inner
 			.prepare_cached(queries::GET_LRC)?
 			.query_row(
 				&[
@@ -88,7 +100,7 @@ impl DbCache {
 		T: TaggedFile,
 	{
 		let mut stmt = self
-			.0
+			.inner
 			.prepare_cached(queries::INSERT_LRC)?;
 		stmt.execute(rusqlite::named_params! {
 			":lyrics": lyrics.as_str().unwrap_or_default(),
@@ -109,6 +121,14 @@ impl DbCache {
 		})?;
 
 		Ok(())
+	}
+}
+
+impl Clone for DbCache {
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+		}
 	}
 }
 

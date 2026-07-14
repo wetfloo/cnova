@@ -12,7 +12,6 @@ use std::fs::OpenOptions;
 use std::mem;
 use std::path::Path;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use lofty::config::WriteOptions;
@@ -114,8 +113,8 @@ where
 			net_io_semaphore.clone(),
 			&mut tagged_rx,
 			lrc_tx,
-			db_cache.into(),
-			lrc_fetcher.into(),
+			db_cache,
+			lrc_fetcher,
 		),
 		step_4(disk_io_semaphore.clone(), &mut lrc_rx),
 	);
@@ -334,8 +333,8 @@ async fn step_3(
 	net_io_semaphore: Arc<tokio::sync::Semaphore>,
 	rx: &mut Receiver<ChanTagged>,
 	tx: Sender<ChanTaggedWithLyrics>,
-	db_cache: Rc<DbCache>,
-	lrc_fetcher: Arc<LyricsFetcher>,
+	db_cache: DbCache,
+	lrc_fetcher: LyricsFetcher,
 ) {
 	let (lrc_request_tx, mut lrc_request_rx) = tokio_channel(1);
 	let (db_insert_tx, mut db_insert_rx) = tokio_channel(1);
@@ -402,7 +401,7 @@ async fn step_3(
 					net_workers.spawn({
 						let net_io_semaphore: Arc<_> = net_io_semaphore.clone();
 						let tx = tx.clone();
-						let lrc_fetcher: Arc<_> = lrc_fetcher.clone();
+						let lrc_fetcher = lrc_fetcher.clone();
 						let db_insert_tx = db_insert_tx.clone();
 
 						async move {

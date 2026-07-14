@@ -1,6 +1,9 @@
 //! Fetch lyrics from the network,
 //! using [`LyricsFetchService`](service::LyricsFetchService) implementation instances.
 
+use std::sync::Arc;
+use std::vec;
+
 use crate::lyrics::TaggedFile;
 use crate::lyrics::service;
 use crate::lyrics::service::LyricsServiceAcquisitionValue;
@@ -10,9 +13,13 @@ pub(crate) type LyricsFetcherResult =
 	Result<LyricsServiceAcquisitionValue, Vec<LyricsServiceError>>;
 type LyricsFetchService = Box<dyn service::LyricsFetchService + Send + Sync + 'static>;
 
+/// A type for fetching song lyrics.
+///
+/// Using this type's [`Clone`]
+/// implementation will clone the underlying [`Arc`].
 #[derive(Default, Debug)]
 pub(crate) struct LyricsFetcher {
-	services: Vec<LyricsFetchService>,
+	services: Arc<[LyricsFetchService]>,
 }
 
 impl LyricsFetcher {
@@ -58,9 +65,17 @@ impl LyricsFetcher {
 	}
 }
 
+impl Clone for LyricsFetcher {
+	fn clone(&self) -> Self {
+		Self {
+			services: self.services.clone(),
+		}
+	}
+}
+
 #[derive(Default, Debug)]
 pub(crate) struct LyricsFetcherBuilder {
-	fetcher: LyricsFetcher,
+	services: Vec<LyricsFetchService>,
 }
 
 impl LyricsFetcherBuilder {
@@ -70,19 +85,19 @@ impl LyricsFetcherBuilder {
 	/// Also see: [`LyricsFetcher::request_lyrics`].
 	pub(crate) fn new(service: LyricsFetchService) -> Self {
 		Self {
-			fetcher: LyricsFetcher {
-				services: vec![service],
-			},
+			services: vec![service],
 		}
 	}
 
 	pub(crate) fn add_service(mut self, service: LyricsFetchService) -> Self {
-		self.fetcher.services.push(service);
+		self.services.push(service);
 
 		self
 	}
 
 	pub(crate) fn build(self) -> LyricsFetcher {
-		self.fetcher
+		LyricsFetcher {
+			services: self.services.into(),
+		}
 	}
 }
