@@ -13,8 +13,6 @@ use crate::lyrics::Lyrics;
 use crate::lyrics::LyricsDiscriminants;
 use crate::lyrics::TaggedFile;
 
-pub(crate) type DbConnection = rusqlite::Connection;
-
 /// An abstract cache over a database.
 ///
 /// Using this type's [`Clone`]
@@ -24,11 +22,12 @@ pub(crate) type DbConnection = rusqlite::Connection;
 /// underlying wrapped types are [`!Send`][Send].
 #[derive(Clone, derive_more::Debug, derive_more::From)]
 pub(crate) struct DbCache {
-	inner: Rc<DbConnection>,
+	#[debug(skip)]
+	inner: Rc<rusqlite::Connection>,
 }
 
 impl DbCache {
-	pub(crate) fn new(db_conn: DbConnection) -> Result<Self, rusqlite::Error> {
+	pub(crate) fn new(db_conn: rusqlite::Connection) -> Result<Self, rusqlite::Error> {
 		db_conn.execute(queries::INIT_TABLE_LRC, ())?;
 
 		Ok(Self {
@@ -230,6 +229,13 @@ mod test {
 		fn duration(&self) -> Duration {
 			self.duration
 		}
+	}
+
+	#[test]
+	fn test_correct_debug_impl() {
+		let cache = init_cache();
+
+		assert_eq!(format!("{:?}", cache), "DbCache { .. }");
 	}
 
 	#[test]
