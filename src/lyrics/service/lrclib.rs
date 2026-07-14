@@ -1,8 +1,6 @@
-use std::fmt;
 use std::sync::Arc;
 
-use pretty_type_name::pretty_type_name;
-
+use super::debug_impl;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TaggedFile;
 use crate::lyrics::service::LyricsFetchService;
@@ -44,11 +42,7 @@ impl LrclibLyricsFetchService {
 	}
 }
 
-impl fmt::Debug for LrclibLyricsFetchService {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str(&pretty_type_name::<Self>())
-	}
-}
+debug_impl!(LrclibLyricsFetchService);
 
 impl LyricsFetchService for LrclibLyricsFetchService {
 	fn request_lyrics(&self, data: &dyn TaggedFile) -> LyricsServiceResult {
