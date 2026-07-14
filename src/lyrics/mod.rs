@@ -69,6 +69,15 @@ impl<F> TaggedFile for lofty::file::BoundTaggedFile<F> {
 	}
 }
 
+macro_rules! tagged_file_fmt {
+	() => {
+		#[inline]
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			TaggedFile::fmt(self, f)
+		}
+	};
+}
+
 #[derive(PartialEq, Eq, derive_more::Debug, derive_more::Constructor, derive_more::From)]
 pub(crate) struct TaggedFileWrapper<T>(pub(crate) T);
 
@@ -76,10 +85,7 @@ impl<T> fmt::Display for TaggedFileWrapper<T>
 where
 	T: TaggedFile,
 {
-	#[inline]
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		TaggedFile::fmt(self, f)
-	}
+	tagged_file_fmt!();
 }
 
 impl<T> TaggedFile for TaggedFileWrapper<T>
@@ -154,8 +160,5 @@ impl TaggedFile for TaggedFileTags {
 }
 
 impl fmt::Display for TaggedFileTags {
-	#[inline]
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		TaggedFile::fmt(self, f)
-	}
+	tagged_file_fmt!();
 }
