@@ -464,12 +464,16 @@ async fn step_3(
 
 			async move {
 				while let Some((tags, lyrics)) = db_insert_rx.recv().await {
-					if let Err(e) = db_cache.insert_lrc(&tags, lyrics) {
-						log::warn!(
+					match db_cache.insert_lrc(&tags, lyrics) {
+						Ok(()) => log::info!(
+							"successfully cached lyrics for {}",
+							&tags,
+						),
+						Err(e) => log::warn!(
 							r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
 							&tags,
 							e,
-						)
+						),
 					}
 				}
 			}
