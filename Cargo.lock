@@ -1651,9 +1651,9 @@ dependencies = [
 
 [[package]]
 name = "simd-adler32"
-version = "0.3.9"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
+checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
 name = "simd_cesu8"
@@ -2127,9 +2127,9 @@ dependencies = [
 
 [[package]]
 name = "wetutil"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0db07de2c0ea7f0a0c2a8620cf41d15ac6e204b52cccc9a7b43395a3bddb456b"
+checksum = "af995396c3de231a09e26e822a43ccb8df0cd73acf645a68aa31b4599fd816f5"
 
 [[package]]
 name = "winapi-util"
