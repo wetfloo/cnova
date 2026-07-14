@@ -19,8 +19,8 @@ lto = "thin"
 openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies]
-anyhow = "1.0"
 # keep-sorted start
+anyhow = "1.0"
 clap = { version = "4.6", features = ["derive", "cargo"] }
 const_format = { version = "0.2", features = ["fmt"] }
 cross-xdg = "2.1"
