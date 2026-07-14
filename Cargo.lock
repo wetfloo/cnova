@@ -2157,9 +2157,9 @@ dependencies = [
 
 [[package]]
 name = "wetutil"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95a1cfd38121639e9e24baf9b01753a9ed2efffa2efba590de829d1bb51381fa"
+checksum = "05aebe4e8110bd60930425f167b485b0e6baabe2dd8334c59d6af1874d26131f"
 dependencies = [
  "pretty-type-name-alloc",
 ]
