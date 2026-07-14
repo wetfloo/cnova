@@ -23,20 +23,6 @@ pub(crate) trait LyricsFetchService: fmt::Debug {
 	}
 }
 
-macro_rules! debug_impl {
-	($type:ty$(,)?) => {
-		impl ::core::fmt::Debug for $type {
-			fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-				f.write_str(&::pretty_type_name::pretty_type_name::<
-					Self,
-				>())
-			}
-		}
-	};
-}
-
-pub(super) use debug_impl;
-
 /// Lyrics with the id of service
 /// that was able to acquire said lyrics.
 pub(crate) struct LyricsServiceAcquisitionValue {

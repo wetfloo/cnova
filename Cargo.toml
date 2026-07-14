@@ -28,7 +28,6 @@ env_logger = "0.11"
 lofty = "0.24"
 log = { version = "0.4", features = ["release_max_level_info"] }
 num_cpus = "1"
-pretty-type-name = "1.0"
 rand = "0.10"
 reqwest = { version = "0.13", features = [ "json", "query", "socks" ]}
 rusqlite = { version = "0.40", features = ["cache"] }
@@ -38,5 +37,5 @@ strum = { version = "0.28", features = ["derive"] }
 thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
-wetutil = "0.3"
+wetutil = "0.4"
 # keep-sorted end

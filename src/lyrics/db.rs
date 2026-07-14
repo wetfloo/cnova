@@ -1,11 +1,10 @@
 //! Handle database cache interactions.
 
-use std::fmt;
 use std::time::SystemTime;
 use std::time::SystemTimeError;
 use std::time::UNIX_EPOCH;
+use wetutil::impl_gen;
 
-use pretty_type_name::pretty_type_name;
 use rusqlite::OptionalExtension;
 use strum::IntoDiscriminant;
 
@@ -18,11 +17,7 @@ pub(crate) type DbConnection = rusqlite::Connection;
 
 pub(crate) struct DbCache(DbConnection);
 
-impl fmt::Debug for DbCache {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str(&pretty_type_name::<Self>())
-	}
-}
+impl_gen::debug::from_type_name!(DbCache);
 
 impl DbCache {
 	pub(crate) fn new(db_conn: DbConnection) -> Result<Self, rusqlite::Error> {

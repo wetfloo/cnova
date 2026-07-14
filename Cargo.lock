@@ -235,7 +235,6 @@ dependencies = [
  "log",
  "num_cpus",
  "openssl",
- "pretty-type-name",
  "rand",
  "reqwest",
  "rusqlite",
@@ -1230,10 +1229,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pretty-type-name"
-version = "1.0.1"
+name = "pretty-type-name-alloc"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0f73cdaf19b52e6143685c3606206e114a4dfa969d6b14ec3894c88eb38bd4b"
+checksum = "29de89db8f67b92db51e794174590ea5bf0db3b61a8d1d6d0769a47689f83c37"
 
 [[package]]
 name = "proc-macro2"
@@ -2158,9 +2157,12 @@ dependencies = [
 
 [[package]]
 name = "wetutil"
-version = "0.3.2"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f8d83c0b9d7f01bb2f3acc6750f9482304879c506f9dd04f022fbf5172111b2"
+checksum = "95a1cfd38121639e9e24baf9b01753a9ed2efffa2efba590de829d1bb51381fa"
+dependencies = [
+ "pretty-type-name-alloc",
+]
 
 [[package]]
 name = "winapi-util"

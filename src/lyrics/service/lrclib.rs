@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use super::debug_impl;
 use crate::lyrics::Lyrics;
 use crate::lyrics::TaggedFile;
 use crate::lyrics::service::LyricsFetchService;
 use crate::lyrics::service::LyricsServiceErrorInner;
 use crate::lyrics::service::LyricsServiceResult;
+
+use wetutil::impl_gen;
 
 pub(crate) struct LrclibLyricsFetchService {
 	http_client: Arc<reqwest::Client>,
@@ -42,7 +43,7 @@ impl LrclibLyricsFetchService {
 	}
 }
 
-debug_impl!(LrclibLyricsFetchService);
+impl_gen::debug::from_type_name!(LrclibLyricsFetchService);
 
 impl LyricsFetchService for LrclibLyricsFetchService {
 	fn request_lyrics(&self, data: &dyn TaggedFile) -> LyricsServiceResult {
