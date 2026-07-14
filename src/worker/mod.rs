@@ -362,7 +362,7 @@ async fn step_3(
 								tagged_file_wrapper,
 							);
 
-							tx.send((lrc, tagged_file_wrapper.into_inner()))
+							tx.send((lrc, tagged_file_wrapper.0))
 								.expect(CHANNEL_SEND_EXPECT_MSG);
 							// ...if that worked, move on.
 							continue;
@@ -442,7 +442,7 @@ async fn step_3(
 										.await
 										.expect(CHANNEL_SEND_EXPECT_MSG);
 
-									tx.send((lyrics, tagged_file_wrapper.into_inner()))
+									tx.send((lyrics, tagged_file_wrapper.0))
 										.expect(CHANNEL_SEND_EXPECT_MSG);
 								},
 

@@ -69,37 +69,8 @@ impl<F> TaggedFile for lofty::file::BoundTaggedFile<F> {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct TaggedFileWrapper<T>(T);
-
-impl<T> TaggedFileWrapper<T> {
-	#[inline]
-	pub(crate) fn new(value: T) -> Self {
-		value.into()
-	}
-
-	#[inline]
-	pub(crate) fn into_inner(self) -> T {
-		self.0
-	}
-
-	#[inline]
-	pub(crate) fn inner(&self) -> &T {
-		&self.0
-	}
-
-	#[inline]
-	pub(crate) fn inner_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-impl<T> From<T> for TaggedFileWrapper<T> {
-	#[inline]
-	fn from(value: T) -> Self {
-		Self(value)
-	}
-}
+#[derive(PartialEq, Eq, derive_more::Debug, derive_more::Constructor, derive_more::From)]
+pub(crate) struct TaggedFileWrapper<T>(pub(crate) T);
 
 impl<T> fmt::Display for TaggedFileWrapper<T>
 where

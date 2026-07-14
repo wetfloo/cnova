@@ -20,6 +20,7 @@ anyhow = "1.0"
 clap = { version = "4.6", features = ["derive", "cargo"] }
 const_format = { version = "0.2", features = ["fmt"] }
 cross-xdg = "2.1"
+derive_more = { version = "2", features = ["std", "constructor", "debug", "from", "full"] }
 env_logger = "0.11"
 lofty = "0.24"
 log = { version = "0.4", features = ["release_max_level_info"] }
@@ -33,5 +34,5 @@ strum = { version = "0.28", features = ["derive"] }
 thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
-wetutil = "0.5"
+wetutil = "0.6"
 # keep-sorted end

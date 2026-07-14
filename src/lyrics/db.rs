@@ -7,7 +7,6 @@ use std::time::UNIX_EPOCH;
 
 use rusqlite::OptionalExtension;
 use strum::IntoDiscriminant;
-use wetutil::impl_gen;
 
 use crate::lyrics;
 use crate::lyrics::Lyrics;
@@ -23,11 +22,10 @@ pub(crate) type DbConnection = rusqlite::Connection;
 ///
 /// This type is [`!Send`][Send], because the
 /// underlying wrapped types are [`!Send`][Send].
+#[derive(Clone, derive_more::Debug, derive_more::From)]
 pub(crate) struct DbCache {
 	inner: Rc<DbConnection>,
 }
-
-impl_gen::debug::from_type_name!(DbCache);
 
 impl DbCache {
 	pub(crate) fn new(db_conn: DbConnection) -> Result<Self, rusqlite::Error> {
@@ -121,23 +119,6 @@ impl DbCache {
 		})?;
 
 		Ok(())
-	}
-}
-
-impl Clone for DbCache {
-	fn clone(&self) -> Self {
-		Self {
-			inner: self.inner.clone(),
-		}
-	}
-}
-
-impl TryFrom<DbConnection> for DbCache {
-	type Error = rusqlite::Error;
-
-	#[inline]
-	fn try_from(value: DbConnection) -> Result<Self, Self::Error> {
-		Self::new(value)
 	}
 }
 

@@ -17,7 +17,7 @@ type LyricsFetchService = Box<dyn service::LyricsFetchService + Send + Sync + 's
 ///
 /// Using this type's [`Clone`]
 /// implementation will clone the underlying [`Arc`].
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct LyricsFetcher {
 	services: Arc<[LyricsFetchService]>,
 }
@@ -62,14 +62,6 @@ impl LyricsFetcher {
 	/// See [LyricsFetcherBuilder::new] for details.
 	pub(crate) fn builder(service: LyricsFetchService) -> LyricsFetcherBuilder {
 		LyricsFetcherBuilder::new(service)
-	}
-}
-
-impl Clone for LyricsFetcher {
-	fn clone(&self) -> Self {
-		Self {
-			services: self.services.clone(),
-		}
 	}
 }
 
