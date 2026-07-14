@@ -37,5 +37,5 @@ strum = { version = "0.28", features = ["derive"] }
 thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
-wetutil = "0.4"
+wetutil = "0.5"
 # keep-sorted end
