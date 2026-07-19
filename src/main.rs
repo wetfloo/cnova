@@ -17,7 +17,8 @@ use crate::lyrics::db::DbCache;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::try_init()?;
+	env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("cnova=info"))
+		.try_init()?;
 
 	let base_dirs = cross_xdg::BaseDirs::with_prefix(env!("CARGO_CRATE_NAME"))?;
 	log::debug!("got base dirs");
