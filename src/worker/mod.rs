@@ -467,11 +467,11 @@ async fn step_3(
 					match db_cache.insert_lrc(&tags, lyrics) {
 						Ok(()) => log::info!(
 							"successfully cached lyrics for {}",
-							&tags,
+							tags,
 						),
 						Err(e) => log::warn!(
 							r#"failed to insert lyrics for {} with error "{}", it will not be cached!"#,
-							&tags,
+							tags,
 							e,
 						),
 					}
